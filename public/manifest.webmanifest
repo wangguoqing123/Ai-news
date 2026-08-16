@@ -1,0 +1,14 @@
+{
+  "name": "Signal Desk｜信号台",
+  "short_name": "信号台",
+  "description": "个人内容情报、学习与选题工作台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F3EE",
+  "theme_color": "#315C45",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
