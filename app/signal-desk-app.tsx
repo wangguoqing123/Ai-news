@@ -436,16 +436,25 @@ function SourcesPage({ notify, openConfig }: { notify: (message: string) => void
       notify(error instanceof Error ? error.message : "YouTube 同步失败");
     }
   };
+  const connectedSourceCount = 2 + (youtubeStatus.connected && !youtubeStatus.lastError ? 1 : 0);
+  const pendingSourceCount = youtubeStatus.loading || !youtubeStatus.connected ? 1 : 0;
+  const failedSourceCount = (aihotStatus === "error" ? 1 : 0) + (youtubeStatus.lastError ? 1 : 0);
+  const syncRows = [
+    ["AIHot","10:42:08","8","8",aihotStatus === "error" ? "失败" : "成功"],
+    ["Get 笔记","10:31:22","8 账号","8","本机验证"],
+    ...(youtubeStatus.connected ? [["YouTube","刚刚",String(youtubeStatus.subscriptionCount),String(youtubeStatus.subscriptionCount),youtubeStatus.lastError ? "需重试" : "成功"]] : []),
+    ["Demo Connector","08:00:02","47","47","成功"],
+  ];
   return <>
     <PageHeading eyebrow="连接、映射与健康状态" title="来源中心" description="每个来源独立同步、独立失败；原始响应可重放，字段映射有版本。" action={<button className="primary-button" onClick={openConfig}><Plus size={17} />添加来源</button>} />
-    <div className="source-summary"><div><span className="status-dot online" /><strong>2</strong><small>真实可读</small></div><div><span className="status-dot pending" /><strong>1</strong><small>待授权</small></div><div><span className="status-dot" /><strong>0</strong><small>失败</small></div><div><Clock3 size={18} /><strong>08:00</strong><small>下次计划同步</small></div></div>
+    <div className="source-summary"><div><span className="status-dot online" /><strong>{connectedSourceCount}</strong><small>真实可读</small></div><div><span className="status-dot pending" /><strong>{pendingSourceCount}</strong><small>待授权</small></div><div><span className="status-dot" /><strong>{failedSourceCount}</strong><small>失败</small></div><div><Clock3 size={18} /><strong>08:00</strong><small>下次计划同步</small></div></div>
     <div className="source-cards">
       <SourceCard icon={<Zap />} name="AIHot" type="AI 资讯" status={aihotStatus === "ready" ? "已连接 · 真实接口" : aihotStatus === "syncing" ? "正在同步" : "同步失败"} health={aihotStatus === "error" ? "error" : "good"} detail="匿名只读 v1 API · 24 小时窗口 · 事件聚类" stats={[["最近同步", "刚刚"], ["本次新增", "3"]]} onSync={syncAihot} />
       <SourceCard icon={<FileText />} name="Get 笔记" type="竞品知识库" status="已连接 · 本机验证" health="good" detail="Ai 自媒体对标博主 · 只读 · 互动为空不推断热度" stats={[["已识别账号", "8+"], ["日读取额度", "20,000"]]} onSync={() => notify("Get 笔记本机凭证可用；云端部署需配置 Token 与字段映射")} />
       <SourceCard icon={<Video />} name="YouTube" type="订阅与公开视频" status={youtubeStatus.loading ? "正在检查" : youtubeStatus.connected ? youtubeStatus.lastError ? "已连接 · 同步需重试" : "已连接 · 官方只读接口" : "等待授权"} health={youtubeStatus.lastError ? "error" : youtubeStatus.connected ? "good" : "pending"} detail={youtubeStatus.lastError ?? "只读订阅 · uploads playlist 增量 · 字幕 Provider 独立"} stats={[["订阅频道", youtubeStatus.connected ? String(youtubeStatus.subscriptionCount) : "—"], ["授权范围", "只读"]]} onSync={syncYoutube} actionLabel={youtubeStatus.connected ? "同步订阅" : "连接 YouTube"} />
       <SourceCard icon={<Database />} name="Demo Connector" type="完整演示数据" status="已启用" health="good" detail="外部凭证缺失时演示同步、学习、知识与选题完整流程" stats={[["演示记录", "47"], ["状态", "可重置"]]} onSync={() => notify("Demo 数据已重置并重新生成今日简报")} />
     </div>
-    <section className="sync-log"><SectionTitle title="最近同步" detail="原始数据、标准化与任务状态分开记录" /><div className="table-head"><span>来源</span><span>开始时间</span><span>原始</span><span>标准化</span><span>状态</span></div>{[["AIHot","10:42:08","8","8","成功"],["Get 笔记","10:31:22","8 账号","8","本机验证"],["Demo Connector","08:00:02","47","47","成功"]].map((row) => <div className="table-row" key={row[0]}>{row.map((cell, i) => i === 4 ? <span className="success-text" key={cell}>{cell}</span> : <span key={cell}>{cell}</span>)}</div>)}</section>
+    <section className="sync-log"><SectionTitle title="最近同步" detail="原始数据、标准化与任务状态分开记录" /><div className="table-head"><span>来源</span><span>开始时间</span><span>原始</span><span>标准化</span><span>状态</span></div>{syncRows.map((row) => <div className="table-row" key={row[0]}>{row.map((cell, i) => i === 4 ? <span className="success-text" key={cell}>{cell}</span> : <span key={cell}>{cell}</span>)}</div>)}</section>
   </>;
 }
 
