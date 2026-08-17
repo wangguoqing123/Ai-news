@@ -8,7 +8,8 @@
 - Get 笔记 CLI 已认证到知识库 `J9o7AMeY`；本轮扫描 20 位博主、发现 378 条，受平台 QPS 限流影响新增 16 条具体内容，结果标记为部分成功。
 - 独立的 Supabase `signal-desk` 项目已创建；初始迁移已在生产项目执行成功，核心表、pgvector、工作区触发器、RLS 与显式 Data API 角色权限已建立。
 - Supabase 生产 Site URL、线上回调与本地回调已配置；本机和私有 Sites 环境已写入对应项目凭证。
-- Web 页面、API Route、TypeScript、22 个单元测试、两份迁移/RLS 的隔离 PostgreSQL 集成测试和 2 个 Playwright E2E 在当前机器运行通过。
+- Web 页面、API Route、TypeScript、23 个单元测试、两份迁移/RLS 的隔离 PostgreSQL 集成测试和 2 个 Playwright E2E 在当前机器运行通过。
+- vinext 生产构建已用真实 Chrome 连续回归今日、AI 动态、博主动态、学习与选题、来源和设置；站内导航控制台 0 个 error / warning，并由生产 bundle 测试防止重新引入有问题的 `next/link` runtime。
 
 ## 显式 Demo 隔离验证
 

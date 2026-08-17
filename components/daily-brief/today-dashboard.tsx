@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight,CalendarDays,Clock3,ExternalLink,RefreshCw,Sparkles } from "lucide-react";
-import Link from "next/link";
+import Link from "../ui/app-link";
 import { useCallback,useEffect,useState } from "react";
 import type { TodayPayload } from "../../lib/domain/signal-desk";
 import { apiFetch } from "../../lib/client/api";

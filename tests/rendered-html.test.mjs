@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 async function loadWorker() {
@@ -29,4 +31,9 @@ test("health endpoint reports the running mode", async () => {
   const data = await response.json();
   assert.equal(data.service,"signal-desk-web");
   assert.ok(["demo","supabase","unconfigured"].includes(data.mode));
+});
+
+test("production client bundle omits the broken vinext Link runtime", () => {
+  const chunks = fs.readdirSync(path.join(process.cwd(),"dist/client/_next/static/chunks"));
+  assert.deepEqual(chunks.filter((name) => /^link-.*\.js$/.test(name)),[]);
 });

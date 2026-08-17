@@ -1,6 +1,6 @@
 "use client";
 import{ArrowRight,RefreshCw}from"lucide-react";
-import Link from"next/link";
+import Link from"../ui/app-link";
 import{useCallback,useEffect,useState}from"react";
 import{apiFetch}from"../../lib/client/api";
 

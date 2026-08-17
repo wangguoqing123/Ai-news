@@ -1,7 +1,7 @@
 "use client";
 
 import { BookOpen,ChevronDown,Compass,Lightbulb,Menu,Newspaper,Radio,Search,Settings,Wifi,X } from "lucide-react";
-import Link from "next/link";
+import Link from "../ui/app-link";
 import { usePathname } from "next/navigation";
 import { useEffect,useState } from "react";
 import { getBrowserSupabase } from "../../lib/supabase/client";

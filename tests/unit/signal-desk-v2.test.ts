@@ -13,6 +13,7 @@ import { parseYouTubeChapters,parseYouTubeDuration,type YouTubePlaylistVideo } f
 
 const root=process.cwd();
 const read=(relative:string)=>fs.readFileSync(path.join(root,relative),"utf8");
+const sourceFiles=(directory:string):string[]=>fs.readdirSync(path.join(root,directory),{withFileTypes:true}).flatMap((entry)=>entry.isDirectory()?sourceFiles(path.join(directory,entry.name)):[path.join(directory,entry.name)]).filter((file)=>/\.(tsx?|jsx?)$/.test(file));
 
 test("event clustering groups the same launch and separates unrelated changes",()=>{
   assert.ok(eventSimilarity("OpenAI 发布 Codex 5.6", "OpenAI Codex 5.6 正式发布")>=0.55);
@@ -65,6 +66,12 @@ test("production pages have no demo imports or fixed V1 statistics",()=>{
   assert.doesNotMatch(production,/47 条新增|21 条去重|今日三项|score:\s*92/);
   assert.match(read("lib/server/auth.ts"),/SIGNAL_DESK_DEMO_MODE === "true"/);
   assert.match(read("components/layout/workspace-shell.tsx"),/演示模式 · 不含真实数据/);
+});
+
+test("internal links avoid vinext production RSC prefetch runtime",()=>{
+  const applicationSource=[...sourceFiles("app"),...sourceFiles("components")].map(read).join("\n");
+  assert.doesNotMatch(applicationSource,/from\s*["']next\/link["']/);
+  assert.match(read("components/ui/app-link.tsx"),/return <a \{\.\.\.props\}>\{children\}<\/a>/);
 });
 
 test("learning details and topics are dynamic and persist source relations",()=>{
