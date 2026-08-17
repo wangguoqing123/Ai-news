@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { signState } from "../../../../../lib/security/crypto";
 
 export async function POST(request: Request) {
+  const requestUrl = new URL(request.url);
   const clientId = process.env.YOUTUBE_CLIENT_ID;
   const redirectUri = process.env.YOUTUBE_REDIRECT_URI;
   const stateSecret = process.env.OAUTH_STATE_SECRET ?? process.env.OAUTH_TOKEN_ENCRYPTION_KEY;
@@ -21,5 +22,6 @@ export async function POST(request: Request) {
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id",clientId); url.searchParams.set("redirect_uri",redirectUri); url.searchParams.set("response_type","code");
   url.searchParams.set("scope","https://www.googleapis.com/auth/youtube.readonly"); url.searchParams.set("access_type","offline"); url.searchParams.set("prompt","consent"); url.searchParams.set("state",state);
-  return Response.json({ url:url.toString() },{ headers:{ "Set-Cookie":`signal_youtube_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600` } });
+  const secure = requestUrl.protocol === "https:" ? "; Secure" : "";
+  return Response.json({ url:url.toString() },{ headers:{ "Set-Cookie":`signal_youtube_state=${state}; Path=/; HttpOnly${secure}; SameSite=Lax; Max-Age=600` } });
 }

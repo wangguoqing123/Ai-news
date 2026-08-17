@@ -82,7 +82,7 @@ export class GenericJsonConnector implements SourceConnector<GenericConnectorCon
     return { items, nextCursor, hasMore: Boolean(nextCursor) };
   }
 
-  async normalize(raw: Record<string, unknown>): Promise<NormalizedContent> {
+  async normalize(): Promise<NormalizedContent> {
     throw new Error("normalize 需要通过 normalizeWithMapping(raw, config.mapping) 调用");
   }
 

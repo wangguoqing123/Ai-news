@@ -1,10 +1,10 @@
-import type { TranscriptProvider, TranscriptRequest, TranscriptResult } from "./types";
+import type { TranscriptProvider, TranscriptResult } from "./types";
 
 export class ManualTranscriptProvider implements TranscriptProvider {
   readonly name = "manual_upload";
   constructor(private readonly result: TranscriptResult) {}
-  async canHandle(_input: TranscriptRequest) { return true; }
-  async fetch(_input: TranscriptRequest) { return this.result; }
+  async canHandle() { return true; }
+  async fetch() { return this.result; }
 }
 
 export function parseSrt(input: string): TranscriptResult {

@@ -1,15 +1,12 @@
 "use client";
 
 import {
-  Activity,
   Archive,
   ArrowRight,
-  BarChart3,
   Bell,
   BookOpen,
   Bookmark,
   Check,
-  ChevronDown,
   ChevronRight,
   CircleAlert,
   CircleCheck,
@@ -21,7 +18,6 @@ import {
   ExternalLink,
   FileText,
   Filter,
-  Gauge,
   Inbox,
   Layers3,
   Library,
@@ -31,7 +27,6 @@ import {
   Menu,
   MessageSquareText,
   MoreHorizontal,
-  Pause,
   Play,
   Plus,
   RefreshCw,
@@ -39,7 +34,6 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
-  Tag,
   TrendingDown,
   TrendingUp,
   Upload,
@@ -83,8 +77,16 @@ export function SignalDeskApp() {
     process.env.NEXT_PUBLIC_SUPABASE_URL ? "loading" : "demo",
   );
   const [page, setPage] = useState<PageKey>("today");
-  const [content, setContent] = useState<ContentItem[]>(demoContent);
-  const [topics, setTopics] = useState<TopicCandidate[]>(demoTopics);
+  const [content, setContent] = useState<ContentItem[]>(() => {
+    if (typeof window === "undefined") return demoContent;
+    try { return (JSON.parse(window.localStorage.getItem("signal-desk-demo-state") ?? "{}") as { content?:ContentItem[] }).content ?? demoContent; }
+    catch { return demoContent; }
+  });
+  const [topics, setTopics] = useState<TopicCandidate[]>(() => {
+    if (typeof window === "undefined") return demoTopics;
+    try { return (JSON.parse(window.localStorage.getItem("signal-desk-demo-state") ?? "{}") as { topics?:TopicCandidate[] }).topics ?? demoTopics; }
+    catch { return demoTopics; }
+  });
   const [searchOpen, setSearchOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
@@ -94,8 +96,7 @@ export function SignalDeskApp() {
 
   useEffect(() => {
     const supabase = getBrowserSupabase();
-    if (!supabase) setAuthState("demo");
-    else {
+    if (supabase) {
       supabase.auth.getSession().then(({ data }) => setAuthState(data.session ? "authenticated" : "unauthenticated"));
       const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setAuthState(session ? "authenticated" : "unauthenticated"));
       return () => listener.subscription.unsubscribe();
@@ -103,13 +104,14 @@ export function SignalDeskApp() {
   }, []);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("signal-desk-demo-state");
-    if (stored) {
-      try {
-        const state = JSON.parse(stored) as { content?: ContentItem[]; topics?: TopicCandidate[] };
-        if (state.content) setContent(state.content);
-        if (state.topics) setTopics(state.topics);
-      } catch { /* invalid demo cache is ignored */ }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("connected") === "youtube") {
+      const count = Number(params.get("subscriptions") ?? 0);
+      queueMicrotask(() => {
+        setPage("sources");
+        setToast({ id:Date.now(),message:params.get("warning") === "sync" ? "YouTube 已授权，订阅导入可在来源页重试" : `YouTube 已连接，导入 ${count} 个订阅频道` });
+      });
+      window.history.replaceState({},"",window.location.pathname);
     }
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   }, []);
@@ -363,7 +365,7 @@ function TopicsPage({ topics, setTopics, updateStatus, notify }: { topics: Topic
     <PageHeading eyebrow="证据驱动的内容决策" title="选题工作台" description="每次最多三个方向；正式立项前必须保留证据、差异与最小实测。" action={<button className="primary-button" onClick={generate}><Plus size={17} />生成候选选题</button>} />
     <div className="topic-toolbar"><div><button className={view === "board" ? "active" : ""} onClick={() => setView("board")}>看板</button><button className={view === "list" ? "active" : ""} onClick={() => setView("list")}>列表</button></div><span>制作中 0 / 1</span><button className="filter-chip"><Filter size={15} />筛选</button></div>
     {view === "board" ? <div className="topic-board">{groups.map((group) => <section key={group.status}><header><strong>{group.label}</strong><span>{topics.filter((topic) => topic.status === group.status).length}</span></header>{topics.filter((topic) => topic.status === group.status).map((topic) => <TopicCard key={topic.id} topic={topic} onOpen={() => setSelected(topic)} />)}{!topics.some((topic) => topic.status === group.status) && <div className="empty-column">暂无选题</div>}</section>)}</div> : <div className="topic-list-view">{topics.map((topic) => <TopicCard key={topic.id} topic={topic} onOpen={() => setSelected(topic)} />)}</div>}
-    {selected && <div className="drawer-backdrop" onMouseDown={() => setSelected(null)}><aside className="topic-drawer" onMouseDown={(event) => event.stopPropagation()}><button className="drawer-close" onClick={() => setSelected(null)}><X size={18} /></button><span className="topic-type">{selected.type}</span><h2>{selected.topic}</h2><div className="topic-score"><strong>{selected.score}</strong><span>/10 五维得分</span><em>历史重复 {selected.similarity}%</em></div><dl><div><dt>目标人群</dt><dd>{selected.audience}</dd></div><div><dt>一句话痛点</dt><dd>{selected.painPoint}</dd></div><div><dt>差异化角度</dt><dd>{selected.angle}</dd></div><div><dt>为什么现在做</dt><dd>{selected.whyNow}</dd></div><div><dt>最小实测任务</dt><dd>{selected.validationTask}</dd></div></dl><section className="evidence-summary"><h3><Link2 size={16} />来源证据 · {selected.evidenceCount}</h3><p>2 个 AIHot 事件 · 1 个视频片段 · 2 条竞品内容 · 1 条用户判断</p></section><div className="drawer-actions"><button className="secondary-button" onClick={() => notify("已进入研究状态")}>继续研究</button><button className="primary-button" onClick={() => { updateStatus(selected.id, "confirmed"); setSelected({ ...selected, status: "confirmed" }); }}>确认选题</button></div></aside></div>}
+    {selected && <dialog open className="drawer-backdrop"><button className="backdrop-dismiss" aria-label="关闭选题详情" onClick={() => setSelected(null)} /><aside className="topic-drawer"><button className="drawer-close" onClick={() => setSelected(null)}><X size={18} /></button><span className="topic-type">{selected.type}</span><h2>{selected.topic}</h2><div className="topic-score"><strong>{selected.score}</strong><span>/10 五维得分</span><em>历史重复 {selected.similarity}%</em></div><dl><div><dt>目标人群</dt><dd>{selected.audience}</dd></div><div><dt>一句话痛点</dt><dd>{selected.painPoint}</dd></div><div><dt>差异化角度</dt><dd>{selected.angle}</dd></div><div><dt>为什么现在做</dt><dd>{selected.whyNow}</dd></div><div><dt>最小实测任务</dt><dd>{selected.validationTask}</dd></div></dl><section className="evidence-summary"><h3><Link2 size={16} />来源证据 · {selected.evidenceCount}</h3><p>2 个 AIHot 事件 · 1 个视频片段 · 2 条竞品内容 · 1 条用户判断</p></section><div className="drawer-actions"><button className="secondary-button" onClick={() => notify("已进入研究状态")}>继续研究</button><button className="primary-button" onClick={() => { updateStatus(selected.id, "confirmed"); setSelected({ ...selected, status: "confirmed" }); }}>确认选题</button></div></aside></dialog>}
   </>;
 }
 
@@ -392,6 +394,19 @@ function ReviewPage({ navigate }: { navigate: (page: PageKey) => void }) {
 
 function SourcesPage({ notify, openConfig }: { notify: (message: string) => void; openConfig: () => void }) {
   const [aihotStatus, setAihotStatus] = useState<"ready" | "syncing" | "error">("ready");
+  const [youtubeStatus, setYoutubeStatus] = useState<{ loading:boolean;connected:boolean;subscriptionCount:number;lastError:string|null }>({ loading:true,connected:false,subscriptionCount:0,lastError:null });
+  const loadYoutubeStatus = async () => {
+    const supabase = getBrowserSupabase();
+    if (!supabase) { setYoutubeStatus({ loading:false,connected:false,subscriptionCount:0,lastError:null }); return; }
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) { setYoutubeStatus({ loading:false,connected:false,subscriptionCount:0,lastError:null }); return; }
+    try {
+      const response = await fetch("/api/connections/youtube/status",{ headers:{ Authorization:`Bearer ${data.session.access_token}` } });
+      const payload = await response.json() as { connected?:boolean;subscriptionCount?:number;lastError?:string|null };
+      setYoutubeStatus({ loading:false,connected:Boolean(payload.connected),subscriptionCount:payload.subscriptionCount ?? 0,lastError:payload.lastError ?? null });
+    } catch { setYoutubeStatus({ loading:false,connected:false,subscriptionCount:0,lastError:"状态读取失败" }); }
+  };
+  useEffect(() => { void loadYoutubeStatus(); }, []);
   const syncAihot = async () => {
     setAihotStatus("syncing");
     try { const response = await fetch("/api/connectors/aihot/sync?limit=1"); const payload = await response.json() as { ok?: boolean }; if (!payload.ok) throw new Error(); setAihotStatus("ready"); notify("AIHot 真实接口同步成功"); } catch { setAihotStatus("error"); notify("AIHot 同步失败，可查看错误详情后重试"); }
@@ -404,21 +419,38 @@ function SourcesPage({ notify, openConfig }: { notify: (message: string) => void
     const payload = await response.json() as { url?:string;error?:string };
     if (payload.url) window.location.assign(payload.url); else notify(payload.error ?? "YouTube 授权未能开始");
   };
+  const syncYoutube = async () => {
+    if (!youtubeStatus.connected) { await connectYoutube(); return; }
+    const supabase = getBrowserSupabase();
+    if (!supabase) return;
+    const { data } = await supabase.auth.getSession();
+    setYoutubeStatus((current) => ({ ...current,loading:true }));
+    try {
+      const response = await fetch("/api/connections/youtube/sync",{ method:"POST",headers:{ Authorization:`Bearer ${data.session?.access_token ?? ""}` } });
+      const payload = await response.json() as { ok?:boolean;subscriptionCount?:number;error?:string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error ?? "同步失败");
+      setYoutubeStatus({ loading:false,connected:true,subscriptionCount:payload.subscriptionCount ?? 0,lastError:null });
+      notify(`YouTube 订阅同步成功，共 ${payload.subscriptionCount ?? 0} 个频道`);
+    } catch (error) {
+      setYoutubeStatus((current) => ({ ...current,loading:false,lastError:error instanceof Error ? error.message : "同步失败" }));
+      notify(error instanceof Error ? error.message : "YouTube 同步失败");
+    }
+  };
   return <>
     <PageHeading eyebrow="连接、映射与健康状态" title="来源中心" description="每个来源独立同步、独立失败；原始响应可重放，字段映射有版本。" action={<button className="primary-button" onClick={openConfig}><Plus size={17} />添加来源</button>} />
     <div className="source-summary"><div><span className="status-dot online" /><strong>2</strong><small>真实可读</small></div><div><span className="status-dot pending" /><strong>1</strong><small>待授权</small></div><div><span className="status-dot" /><strong>0</strong><small>失败</small></div><div><Clock3 size={18} /><strong>08:00</strong><small>下次计划同步</small></div></div>
     <div className="source-cards">
       <SourceCard icon={<Zap />} name="AIHot" type="AI 资讯" status={aihotStatus === "ready" ? "已连接 · 真实接口" : aihotStatus === "syncing" ? "正在同步" : "同步失败"} health={aihotStatus === "error" ? "error" : "good"} detail="匿名只读 v1 API · 24 小时窗口 · 事件聚类" stats={[["最近同步", "刚刚"], ["本次新增", "3"]]} onSync={syncAihot} />
       <SourceCard icon={<FileText />} name="Get 笔记" type="竞品知识库" status="已连接 · 本机验证" health="good" detail="Ai 自媒体对标博主 · 只读 · 互动为空不推断热度" stats={[["已识别账号", "8+"], ["日读取额度", "20,000"]]} onSync={() => notify("Get 笔记本机凭证可用；云端部署需配置 Token 与字段映射")} />
-      <SourceCard icon={<Video />} name="YouTube" type="订阅与公开视频" status="等待 OAuth 配置" health="pending" detail="只读订阅 · uploads playlist 增量 · 字幕 Provider 独立" stats={[["订阅频道", "—"], ["最近同步", "未开始"]]} onSync={connectYoutube} />
+      <SourceCard icon={<Video />} name="YouTube" type="订阅与公开视频" status={youtubeStatus.loading ? "正在检查" : youtubeStatus.connected ? youtubeStatus.lastError ? "已连接 · 同步需重试" : "已连接 · 官方只读接口" : "等待授权"} health={youtubeStatus.lastError ? "error" : youtubeStatus.connected ? "good" : "pending"} detail={youtubeStatus.lastError ?? "只读订阅 · uploads playlist 增量 · 字幕 Provider 独立"} stats={[["订阅频道", youtubeStatus.connected ? String(youtubeStatus.subscriptionCount) : "—"], ["授权范围", "只读"]]} onSync={syncYoutube} actionLabel={youtubeStatus.connected ? "同步订阅" : "连接 YouTube"} />
       <SourceCard icon={<Database />} name="Demo Connector" type="完整演示数据" status="已启用" health="good" detail="外部凭证缺失时演示同步、学习、知识与选题完整流程" stats={[["演示记录", "47"], ["状态", "可重置"]]} onSync={() => notify("Demo 数据已重置并重新生成今日简报")} />
     </div>
     <section className="sync-log"><SectionTitle title="最近同步" detail="原始数据、标准化与任务状态分开记录" /><div className="table-head"><span>来源</span><span>开始时间</span><span>原始</span><span>标准化</span><span>状态</span></div>{[["AIHot","10:42:08","8","8","成功"],["Get 笔记","10:31:22","8 账号","8","本机验证"],["Demo Connector","08:00:02","47","47","成功"]].map((row) => <div className="table-row" key={row[0]}>{row.map((cell, i) => i === 4 ? <span className="success-text" key={cell}>{cell}</span> : <span key={cell}>{cell}</span>)}</div>)}</section>
   </>;
 }
 
-function SourceCard({ icon, name, type, status, health, detail, stats, onSync }: { icon: React.ReactNode; name: string; type: string; status: string; health: "good" | "pending" | "error"; detail: string; stats: [string,string][]; onSync: () => void }) {
-  return <article className="source-card"><div className="source-card-heading"><div className={`source-logo ${health}`}>{icon}</div><div><span>{type}</span><h3>{name}</h3></div><em className={health}>{status}</em></div><p>{detail}</p><dl>{stats.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><footer><button className="secondary-button" onClick={onSync}><RefreshCw size={15} />手动同步</button><button className="icon-button" title="来源设置"><Settings size={16} /></button></footer></article>;
+function SourceCard({ icon, name, type, status, health, detail, stats, onSync, actionLabel = "手动同步" }: { icon: React.ReactNode; name: string; type: string; status: string; health: "good" | "pending" | "error"; detail: string; stats: [string,string][]; onSync: () => void; actionLabel?: string }) {
+  return <article className="source-card"><div className="source-card-heading"><div className={`source-logo ${health}`}>{icon}</div><div><span>{type}</span><h3>{name}</h3></div><em className={health}>{status}</em></div><p>{detail}</p><dl>{stats.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><footer><button className="secondary-button" onClick={onSync}><RefreshCw size={15} />{actionLabel}</button><button className="icon-button" title="来源设置"><Settings size={16} /></button></footer></article>;
 }
 
 function SettingsPage({ dark, setDark, notify }: { dark: boolean; setDark: (value: boolean) => void; notify: (message: string) => void }) {
@@ -445,12 +477,12 @@ function SearchDialog({ close, navigate }: { close: () => void; navigate: (page:
       ...knowledgeCards.filter((item) => `${item.title}${item.body}`.toLowerCase().includes(q)).map((item) => ({ type: "知识卡", title: item.title, page: "knowledge" as const })),
     ];
   }, [query]);
-  return <div className="modal-backdrop" onMouseDown={close}><section className="command-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="command-search"><Search size={20} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、正文、字幕、笔记、知识卡和选题" /><kbd>Esc</kbd></div>{query ? <div className="search-results">{results.map((result, i) => <button key={`${result.title}-${i}`} onClick={() => { navigate(result.page); close(); }}><span>{result.type}</span><strong>{result.title}</strong><ChevronRight size={16} /></button>)}{!results.length && <p>没有找到结果，换个关键词试试。</p>}</div> : <div className="command-groups"><span>快捷操作</span><button onClick={() => { navigate("inbox"); close(); }}><Inbox size={17} />打开收件箱<kbd>G I</kbd></button><button onClick={() => { navigate("topics"); close(); }}><Lightbulb size={17} />打开选题工作台<kbd>G T</kbd></button><button onClick={() => { navigate("sources"); close(); }}><Wifi size={17} />检查来源健康<kbd>G S</kbd></button></div>}<footer><span><Command size={14} />以证据为中心的混合搜索</span><span>PostgreSQL FTS + pgvector</span></footer></section></div>;
+  return <dialog open className="modal-backdrop"><button className="backdrop-dismiss" aria-label="关闭搜索" onClick={close} /><section className="command-dialog"><div className="command-search"><Search size={20} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、正文、字幕、笔记、知识卡和选题" /><kbd>Esc</kbd></div>{query ? <div className="search-results">{results.map((result, i) => <button key={`${result.title}-${i}`} onClick={() => { navigate(result.page); close(); }}><span>{result.type}</span><strong>{result.title}</strong><ChevronRight size={16} /></button>)}{!results.length && <p>没有找到结果，换个关键词试试。</p>}</div> : <div className="command-groups"><span>快捷操作</span><button onClick={() => { navigate("inbox"); close(); }}><Inbox size={17} />打开收件箱<kbd>G I</kbd></button><button onClick={() => { navigate("topics"); close(); }}><Lightbulb size={17} />打开选题工作台<kbd>G T</kbd></button><button onClick={() => { navigate("sources"); close(); }}><Wifi size={17} />检查来源健康<kbd>G S</kbd></button></div>}<footer><span><Command size={14} />以证据为中心的混合搜索</span><span>PostgreSQL FTS + pgvector</span></footer></section></dialog>;
 }
 
 function QuickAddDialog({ close, notify }: { close: () => void; notify: (message: string) => void }) {
   const [url, setUrl] = useState("");
-  return <div className="modal-backdrop" onMouseDown={close}><section className="small-dialog" onMouseDown={(event) => event.stopPropagation()}><button className="drawer-close" onClick={close}><X size={18} /></button><span className="dialog-kicker">快速添加</span><h2>保存一个外部信号</h2><p>链接先进入收件箱，系统不会在保存前自动执行高成本分析。</p><label><span>公开链接</span><input autoFocus type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://..." /></label><label><span>你的判断（可选）</span><textarea placeholder="为什么想保存它？" /></label><button className="primary-button" disabled={!url} onClick={() => { notify("链接已加入收件箱，等待标准化"); close(); }}>保存到收件箱</button></section></div>;
+  return <dialog open className="modal-backdrop"><button className="backdrop-dismiss" aria-label="关闭快速添加" onClick={close} /><section className="small-dialog"><button className="drawer-close" onClick={close}><X size={18} /></button><span className="dialog-kicker">快速添加</span><h2>保存一个外部信号</h2><p>链接先进入收件箱，系统不会在保存前自动执行高成本分析。</p><label><span>公开链接</span><input type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://..." /></label><label><span>你的判断（可选）</span><textarea placeholder="为什么想保存它？" /></label><button className="primary-button" disabled={!url} onClick={() => { notify("链接已加入收件箱，等待标准化"); close(); }}>保存到收件箱</button></section></dialog>;
 }
 
 function FocusSession({ close, navigate }: { close: () => void; navigate: (page: PageKey) => void }) {
@@ -462,7 +494,7 @@ function FocusSession({ close, navigate }: { close: () => void; navigate: (page:
 function ConnectorDialog({ close, notify }: { close: () => void; notify: (message: string) => void }) {
   const [type, setType] = useState("generic_api");
   const [tested, setTested] = useState(false);
-  return <div className="modal-backdrop" onMouseDown={close}><section className="connector-dialog" onMouseDown={(event) => event.stopPropagation()}><button className="drawer-close" onClick={close}><X size={18} /></button><span className="dialog-kicker">可视化连接器</span><h2>添加来源</h2><div className="connector-types">{[["generic_api","JSON API"],["rss","RSS"],["webhook","Webhook"],["get_notes","Get 笔记"]].map(([value,label]) => <button className={type === value ? "active" : ""} onClick={() => setType(value)} key={value}>{label}</button>)}</div><div className="form-grid"><label><span>Base URL</span><input placeholder="https://api.example.com" /></label><label><span>路径</span><input placeholder="/v1/items" /></label><label><span>请求方法</span><select><option>GET</option><option>POST</option></select></label><label><span>分页方式</span><select><option>Cursor</option><option>Page</option><option>Offset</option></select></label><label className="full"><span>Header / Token（服务端加密保存）</span><input type="password" placeholder="不会显示在日志中" /></label></div><h3>字段映射</h3><div className="mapping-grid"><span>标准字段</span><span>原始字段路径</span>{[["标题","data.title"],["正文","data.content"],["发布时间","data.published_at"],["唯一 ID","data.id"]].flatMap(([a,b]) => [<strong key={`${a}-a`}>{a}</strong>,<input key={`${a}-b`} defaultValue={b} />])}</div><div className="connector-preview"><div><strong>原始响应预览</strong><pre>{tested ? '{ "data": { "id": "item_01", "title": "示例" } }' : "测试连接后显示"}</pre></div><ArrowRight size={18} /><div><strong>标准化预览</strong><pre>{tested ? '{ "externalId": "item_01", "title": "示例" }' : "等待字段映射"}</pre></div></div><footer><button className="secondary-button" onClick={() => setTested(true)}>测试连接</button><button className="primary-button" disabled={!tested} onClick={() => { notify("连接配置已验证；Demo 模式不保存凭证"); close(); }}>保存来源</button></footer></section></div>;
+  return <dialog open className="modal-backdrop"><button className="backdrop-dismiss" aria-label="关闭连接器配置" onClick={close} /><section className="connector-dialog"><button className="drawer-close" onClick={close}><X size={18} /></button><span className="dialog-kicker">可视化连接器</span><h2>添加来源</h2><div className="connector-types">{[["generic_api","JSON API"],["rss","RSS"],["webhook","Webhook"],["get_notes","Get 笔记"]].map(([value,label]) => <button className={type === value ? "active" : ""} onClick={() => setType(value)} key={value}>{label}</button>)}</div><div className="form-grid"><label><span>Base URL</span><input placeholder="https://api.example.com" /></label><label><span>路径</span><input placeholder="/v1/items" /></label><label><span>请求方法</span><select><option>GET</option><option>POST</option></select></label><label><span>分页方式</span><select><option>Cursor</option><option>Page</option><option>Offset</option></select></label><label className="full"><span>Header / Token（服务端加密保存）</span><input type="password" placeholder="不会显示在日志中" /></label></div><h3>字段映射</h3><div className="mapping-grid"><span>标准字段</span><span>原始字段路径</span>{[["标题","data.title"],["正文","data.content"],["发布时间","data.published_at"],["唯一 ID","data.id"]].flatMap(([a,b]) => [<strong key={`${a}-a`}>{a}</strong>,<input key={`${a}-b`} defaultValue={b} />])}</div><div className="connector-preview"><div><strong>原始响应预览</strong><pre>{tested ? '{ "data": { "id": "item_01", "title": "示例" } }' : "测试连接后显示"}</pre></div><ArrowRight size={18} /><div><strong>标准化预览</strong><pre>{tested ? '{ "externalId": "item_01", "title": "示例" }' : "等待字段映射"}</pre></div></div><footer><button className="secondary-button" onClick={() => setTested(true)}>测试连接</button><button className="primary-button" disabled={!tested} onClick={() => { notify("连接配置已验证；Demo 模式不保存凭证"); close(); }}>保存来源</button></footer></section></dialog>;
 }
 
 function EmptyState({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {

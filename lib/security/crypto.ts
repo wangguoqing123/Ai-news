@@ -37,3 +37,12 @@ export async function encryptJson(value: unknown, secret: string): Promise<strin
   const encrypted = await crypto.subtle.encrypt({ name:"AES-GCM",iv },key,new TextEncoder().encode(JSON.stringify(value)));
   return `v1.${bytesToBase64Url(iv)}.${bytesToBase64Url(new Uint8Array(encrypted))}`;
 }
+
+export async function decryptJson<T>(value: string, secret: string): Promise<T> {
+  const [version,ivValue,payloadValue] = value.split(".");
+  if (version !== "v1" || !ivValue || !payloadValue) throw new Error("Unsupported encrypted payload");
+  const keyBytes = await crypto.subtle.digest("SHA-256",new TextEncoder().encode(secret));
+  const key = await crypto.subtle.importKey("raw",keyBytes,{ name:"AES-GCM" },false,["decrypt"]);
+  const decrypted = await crypto.subtle.decrypt({ name:"AES-GCM",iv:base64UrlToBytes(ivValue) },key,base64UrlToBytes(payloadValue));
+  return JSON.parse(new TextDecoder().decode(decrypted)) as T;
+}

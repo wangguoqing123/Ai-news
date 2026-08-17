@@ -9,7 +9,7 @@
 - 配置 Supabase 后启用邮箱验证码认证；数据库迁移建立核心表、索引、pgvector、全文检索基础、默认工作区和 RLS。
 - AIHot 使用公开只读 v1 API，页面会尝试读取真实 24 小时信号并明确标注真实或 Demo。
 - Get 笔记已通过本机 CLI 只读验证；云端部署使用可配置 JSON 字段映射，不在业务层硬编码未知 API 字段。
-- YouTube 实现官方只读 uploads playlist 连接器；完成 Google OAuth Client 配置后才能导入用户真实订阅。
+- YouTube 使用官方只读 OAuth；授权回调会导入现有订阅频道及每个频道的 uploads playlist，并可在来源页手动重新同步。
 - 独立 Transcript Provider 接口与手动 SRT Provider；没有字幕时仍可保存并使用标题、简介和章节。
 - PostgreSQL Job 队列 Worker 使用 `FOR UPDATE SKIP LOCKED`、Lease、幂等键、指数退避与 Dead Letter。
 - 评分、去重指纹、Job 重试、字幕解析、连接器映射均有单元测试。

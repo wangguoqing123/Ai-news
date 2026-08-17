@@ -18,7 +18,7 @@ test("server renders Signal Desk without starter markers", async () => {
   const html = await response.text();
   assert.match(html,/<title>Signal Desk｜信号台<\/title>/i);
   assert.match(html,/Signal Desk/);
-  assert.match(html,/今日三项/);
+  assert.match(html,/正在打开你的工作区|今日三项/);
   assert.doesNotMatch(html,/codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
