@@ -4,7 +4,7 @@
 
 - AIHot 公开只读 v1 API 可访问。
 - Get 笔记 CLI 已认证，可读取 `Ai 自媒体对标博主` 知识库中的真实账号列表。
-- 独立的 Supabase `signal-desk` 项目已创建；初始迁移已在生产项目执行成功，核心表、pgvector、工作区触发器与 RLS 已建立。
+- 独立的 Supabase `signal-desk` 项目已创建；初始迁移已在生产项目执行成功，核心表、pgvector、工作区触发器、RLS 与显式 Data API 角色权限已建立。
 - Supabase 生产 Site URL、线上回调与本地回调已配置；本机和私有 Sites 环境已写入对应项目凭证。
 - Web 页面、API Route、TypeScript 与核心单元测试在当前机器运行。
 
