@@ -1,0 +1,107 @@
+export type SourceType = "aihot" | "youtube" | "get_notes";
+
+export type EventLevel = "重大" | "值得关注" | "了解即可";
+export type LearningRecommendation = "deep_learn" | "quick_scan" | "topic_signal" | "ignore" | "pending";
+
+export type EvidenceLink = {
+  id: string;
+  title: string;
+  url: string | null;
+  sourceType: SourceType;
+  sourceName: string;
+  publishedAt: string | null;
+};
+
+export type TodayEvent = {
+  id: string;
+  level: EventLevel;
+  category: string;
+  publishedAt: string | null;
+  title: string;
+  happened: string | null;
+  realChange: string | null;
+  whyImportant: string | null;
+  whyRelevant: string | null;
+  primarySource: EvidenceLink | null;
+  secondarySourceCount: number;
+  relatedCreatorCount: number;
+  contentOpportunity: string | null;
+  evidence: EvidenceLink[];
+  analysisStatus: "ready" | "pending";
+};
+
+export type CreatorItem = {
+  id: string;
+  sourceType: Exclude<SourceType, "aihot">;
+  platform: "YouTube" | "抖音" | "其他";
+  creatorName: string;
+  creatorAvatarUrl: string | null;
+  publishedAt: string | null;
+  durationSeconds: number | null;
+  title: string;
+  translatedTitle: string | null;
+  summary: string | null;
+  thumbnailUrl: string | null;
+  canonicalUrl: string | null;
+  hasTranscript: boolean;
+  interactionAvailable: boolean;
+  recommendation: LearningRecommendation;
+  recommendationReason: string | null;
+  learningTakeaways: string[];
+  topicOpportunity: string | null;
+  analysisStatus: "ready" | "pending";
+  state: { isRead:boolean;isSaved:boolean;watchLater:boolean;isIgnored:boolean;notInterested:boolean;queuedLearning:boolean };
+};
+
+export type CrossSignal = {
+  id: string;
+  title: string;
+  aihotCount: number;
+  youtubeCount: number;
+  competitorCount: number;
+  windowLabel: string;
+  trendStatus: "正在升温" | "持续关注" | "信号较弱";
+  expressionDifference: string | null;
+  differentiatedTopic: string | null;
+};
+
+export type DailyBriefEntry = {
+  id: string;
+  kind: "event" | "trend" | "creator" | "topic";
+  label: string;
+  title: string;
+  description: string | null;
+  href: string;
+};
+
+export type TodayPayload = {
+  mode: "live" | "demo";
+  date: string;
+  windowLabel: "过去 24 小时";
+  stats: {
+    importantEvents: number;
+    creatorUpdates: number;
+    deepLearning: number;
+    topicOpportunities: number;
+  };
+  lastSyncedAt: string | null;
+  briefStatus: "ready" | "missing";
+  brief: DailyBriefEntry[];
+  events: TodayEvent[];
+  creators: CreatorItem[];
+  crossSignals: CrossSignal[];
+};
+
+export type ContentAction = "read" | "saved" | "watch_later" | "ignored" | "not_interested" | "queued_learning";
+
+export type TranscriptSegment={id:string;startMs:number;endMs:number;text:string;translatedText:string|null};
+export type LearningDetail={
+  content:CreatorItem & {body:string|null;embedUrl:string|null;chapters:Array<{startSeconds:number;title:string}>;transcriptStatus:string};
+  session:{id:string;status:string;goal:string;positionMs:number;watchedMs:number}|null;
+  transcript:{status:string;language:string|null;segments:TranscriptSegment[];plainText:string|null};
+  analysis:Record<string,unknown>|null;
+  notes:Array<{id:string;type:string;markdown:string;timestampMs:number|null;createdAt:string}>;
+  knowledgeCards:Array<{id:string;title:string;type:string;content:string;createdAt:string}>;
+  practiceTasks:Array<{id:string;name:string;purpose:string|null;status:string;result:string|null}>;
+  quiz:{id:string;status:string;questions:Array<{id:string;type:string;prompt:string;rubric:Record<string,unknown>}>}|null;
+};

@@ -1,18 +1,19 @@
 # Signal Desk｜信号台
 
-个人内容情报、学习与选题工作台。它把 YouTube 订阅、AIHot 资讯和 Get 笔记竞品内容统一为四个对象：Signal、Learning、Knowledge、Topic。
+每天看清 AI 世界与关注博主的真实更新，并从可追溯证据进入学习与选题。
 
 ## 当前交付
 
-- 可运行的响应式 Web 产品，包含今日、收件箱、学习、情报、竞品、选题、知识库、复盘、来源和设置。
-- 无外部凭证时自动使用 Demo Connector，所有核心按钮均有可见结果，Demo 状态保存在当前设备并可重置。
+- 五个一级入口：今日、AI 动态、博主动态、学习与选题、来源。收件箱、知识库、复盘和 Job 管理降为设置中的二级入口。
+- 今日页、AI 事件、博主内容、学习详情、选题证据和全部用户动作均读取或写入 Supabase；生产页面不导入 `demo-data.ts`。
+- Demo 只在 `SIGNAL_DESK_DEMO_MODE=true` 时启用，页面明确标记且只展示诚实空状态。
 - 配置 Supabase 后启用邮箱验证码认证；数据库迁移建立核心表、索引、pgvector、全文检索基础、默认工作区和 RLS。
-- AIHot 使用公开只读 v1 API，页面会尝试读取真实 24 小时信号并明确标注真实或 Demo。
-- Get 笔记已通过本机 CLI 只读验证；云端部署使用可配置 JSON 字段映射，不在业务层硬编码未知 API 字段。
-- YouTube 使用官方只读 OAuth；授权回调会导入现有订阅频道及每个频道的 uploads playlist，并可在来源页手动重新同步。
+- AIHot 完整链路：原始 payload、标准化、精确去重、事件候选聚类、可选 pgvector/AI 二次判断、跨源信号和每日简报。
+- Get 笔记支持 API、独立 CLI Worker 和 HMAC Webhook；互动字段缺失时明确显示“互动数据不可用”。
+- YouTube 使用官方只读 OAuth，按每个频道 uploads playlist 游标增量读取详情，并处理分页、配额、Short、直播、不可用视频和无字幕状态。
 - 独立 Transcript Provider 接口与手动 SRT Provider；没有字幕时仍可保存并使用标题、简介和章节。
 - PostgreSQL Job 队列 Worker 使用 `FOR UPDATE SKIP LOCKED`、Lease、幂等键、指数退避与 Dead Letter。
-- 评分、去重指纹、Job 重试、字幕解析、连接器映射均有单元测试。
+- 单元、PostgreSQL 16 + pgvector 迁移/RLS 集成、服务端渲染和 Playwright 五入口 E2E 均有自动化测试。
 
 ## 本地运行
 
@@ -21,7 +22,7 @@ npm install
 npm run dev
 ```
 
-未配置环境变量时直接进入 Demo 模式。复制 `.env.example` 为 `.env.local` 并配置 Supabase 后，应用会改为邮箱验证码登录。
+复制 `.env.example` 为 `.env.local` 并配置 Supabase 后，应用使用邮箱验证码登录。没有数据库配置时返回明确的未配置状态，不会自动混入 Demo；需要演示时显式设置两个 Demo 环境变量。
 
 ## 数据库
 
@@ -29,6 +30,7 @@ npm run dev
 
 ```text
 supabase/migrations/202608170001_signal_desk.sql
+supabase/migrations/202608170002_signal_desk_v2.sql
 ```
 
 迁移会建立扩展、核心表、默认工作区触发器与 RLS。不要把 Service Role Key 放入浏览器环境变量。
@@ -37,8 +39,10 @@ supabase/migrations/202608170001_signal_desk.sql
 
 ```bash
 npm run typecheck
-npm run test:unit
+npm run lint
+npm run test
 npm run build
+npm run test:rendered
 npm run verify:live
 ```
 
