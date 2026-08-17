@@ -427,7 +427,12 @@ function SourcesPage({ notify, openConfig }: { notify: (message: string) => void
     setYoutubeStatus((current) => ({ ...current,loading:true }));
     try {
       const response = await fetch("/api/connections/youtube/sync",{ method:"POST",headers:{ Authorization:`Bearer ${data.session?.access_token ?? ""}` } });
-      const payload = await response.json() as { ok?:boolean;subscriptionCount?:number;error?:string };
+      const payload = await response.json() as { ok?:boolean;subscriptionCount?:number;error?:string;requiresReauth?:boolean };
+      if (payload.requiresReauth) {
+        setYoutubeStatus((current) => ({ ...current,loading:false,connected:false,lastError:payload.error ?? "YouTube 授权已过期，请重新授权" }));
+        notify(payload.error ?? "YouTube 授权已过期，请重新授权");
+        return;
+      }
       if (!response.ok || !payload.ok) throw new Error(payload.error ?? "同步失败");
       setYoutubeStatus({ loading:false,connected:true,subscriptionCount:payload.subscriptionCount ?? 0,lastError:null });
       notify(`YouTube 订阅同步成功，共 ${payload.subscriptionCount ?? 0} 个频道`);

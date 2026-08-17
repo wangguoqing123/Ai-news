@@ -17,7 +17,7 @@ export async function GET(request: Request) {
       const { count } = await admin.from("source_subscriptions").select("id",{ count:"exact",head:true }).eq("workspace_id",context.workspaceId).eq("source_id",source.id).eq("enabled",true);
       subscriptionCount = count ?? 0;
     }
-    return Response.json({ connected:true,status:connection.status,subscriptionCount,lastSuccessAt:source?.last_success_at ?? connection.updated_at,lastError:connection.last_error });
+    return Response.json({ connected:connection.status === "connected",status:connection.status,subscriptionCount,lastSuccessAt:source?.last_success_at ?? connection.updated_at,lastError:connection.last_error });
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error:error instanceof Error ? error.message : "读取连接状态失败" },{ status:500 });

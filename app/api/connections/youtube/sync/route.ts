@@ -19,8 +19,16 @@ export async function POST(request: Request) {
     if (error || !connection?.encrypted_config) return Response.json({ error:"YouTube 尚未授权" },{ status:409 });
     let tokens = await decryptJson<YouTubeOAuthTokens>(connection.encrypted_config,encryptionSecret);
     if (!tokens.access_token || !tokens.expires_at || tokens.expires_at < Date.now()+60_000) {
-      if (!tokens.refresh_token) return Response.json({ error:"YouTube 授权已失效，请重新授权" },{ status:401 });
-      tokens = await refreshYouTubeAccessToken({ refreshToken:tokens.refresh_token,clientId,clientSecret });
+      if (!tokens.refresh_token) {
+        await admin.from("source_connections").update({ status:"expired",last_error:"YouTube 授权已失效，请重新授权" }).eq("id",connection.id);
+        return Response.json({ error:"YouTube 授权已失效，请重新授权",requiresReauth:true },{ status:401 });
+      }
+      try {
+        tokens = await refreshYouTubeAccessToken({ refreshToken:tokens.refresh_token,clientId,clientSecret });
+      } catch {
+        await admin.from("source_connections").update({ status:"expired",last_error:"YouTube 授权已过期，请重新授权" }).eq("id",connection.id);
+        return Response.json({ error:"YouTube 授权已过期，请重新授权",requiresReauth:true },{ status:401 });
+      }
       await admin.from("source_connections").update({ encrypted_config:await encryptJson(tokens,encryptionSecret),last_error:null }).eq("id",connection.id);
     }
     const subscriptions = await fetchYouTubeSubscriptions(tokens.access_token);
