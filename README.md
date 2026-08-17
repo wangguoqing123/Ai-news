@@ -11,8 +11,8 @@
 - AIHot 完整链路：原始 payload、标准化、精确去重、事件候选聚类、可选 pgvector/AI 二次判断、跨源信号和每日简报。
 - Get 笔记支持 API、独立 CLI Worker 和 HMAC Webhook；互动字段缺失时明确显示“互动数据不可用”。
 - YouTube 使用官方只读 OAuth，按每个频道 uploads playlist 游标增量读取详情，并处理分页、配额、Short、直播、不可用视频和无字幕状态。
-- 独立 Transcript Provider 接口与手动 SRT Provider；没有字幕时仍可保存并使用标题、简介和章节。
-- PostgreSQL Job 队列 Worker 使用 `FOR UPDATE SKIP LOCKED`、Lease、幂等键、指数退避与 Dead Letter。
+- Transcript Provider 链支持可配置 API、Worker 专用 `yt-dlp` 和 SRT/VTT/TXT 手动上传；没有字幕时明确降级。
+- PostgreSQL Job 队列 Worker 使用 `FOR UPDATE SKIP LOCKED`、blocked 依赖、版本化幂等键、Lease heartbeat、指数退避与 Dead Letter。
 - 单元、PostgreSQL 16 + pgvector 迁移/RLS 集成、服务端渲染和 Playwright 五入口 E2E 均有自动化测试。
 
 ## 本地运行
@@ -31,6 +31,7 @@ npm run dev
 ```text
 supabase/migrations/202608170001_signal_desk.sql
 supabase/migrations/202608170002_signal_desk_v2.sql
+supabase/migrations/202608170003_signal_desk_reliable_daily.sql
 ```
 
 迁移会建立扩展、核心表、默认工作区触发器与 RLS。不要把 Service Role Key 放入浏览器环境变量。

@@ -1,0 +1,3 @@
+export const YOUTUBE_PLAYING_STATE=1;
+export function nextWatchedMs(input:{watchedMs:number;playerState:number;lastTickAt:number|null;now:number;maxGapMs?:number}){if(input.playerState!==YOUTUBE_PLAYING_STATE||input.lastTickAt===null)return input.watchedMs;const elapsed=Math.max(0,Math.min(input.now-input.lastTickAt,input.maxGapMs??2_000));return input.watchedMs+elapsed;}
+export function buildYouTubeEmbedUrl(embedUrl:string,initialPositionMs:number,origin?:string){const url=new URL(embedUrl);url.searchParams.set("enablejsapi","1");url.searchParams.set("playsinline","1");const start=Math.floor(Math.max(0,initialPositionMs)/1000);if(start)url.searchParams.set("start",String(start));if(origin)url.searchParams.set("origin",origin);return url.toString();}

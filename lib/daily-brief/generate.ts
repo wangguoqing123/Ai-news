@@ -9,11 +9,11 @@ export function buildDailyBriefEntries(input:{
   creator?:{id:string;title:string;summary:string|null}|null;
   topic?:{id:string;topic:string;differentiated_angle:string|null}|null;
 }) {
-  const entries:DailyBriefEntry[]=input.events.map((item,index) => ({ id:`event-${item.id}`,kind:"event",label:`重要事件 ${index+1}`,title:item.title,description:item.summary,href:`/ai-news?event=${item.id}` }));
-  if(input.trend)entries.push({id:`trend-${input.trend.id}`,kind:"trend",label:"正在升温的主题",title:input.trend.title,description:input.trend.summary,href:`/ai-news?trend=${input.trend.id}`});
-  if(input.creator)entries.push({ id:`creator-${input.creator.id}`,kind:"creator",label:"最值得看的博主内容",title:input.creator.title,description:input.creator.summary,href:`/learning/${input.creator.id}` });
-  if(input.topic)entries.push({ id:`topic-${input.topic.id}`,kind:"topic",label:"选题机会",title:input.topic.topic,description:input.topic.differentiated_angle,href:`/learning?topic=${input.topic.id}` });
-  return entries;
+  const entries:DailyBriefEntry[]=input.events.slice(0,2).map((item,index) => ({ id:`event-${item.id}`,kind:"event",label:index===0?"今天最重要的是":"还值得关注",title:item.title,description:item.summary,href:`/ai-news?event=${item.id}` }));
+  if(input.trend)entries.push({id:`trend-${input.trend.id}`,kind:"trend",label:"跨来源变化",title:input.trend.title,description:input.trend.summary,href:`/ai-news?trend=${input.trend.id}`});
+  if(input.creator)entries.push({ id:`creator-${input.creator.id}`,kind:"creator",label:"今天最值得投入时间",title:input.creator.title,description:input.creator.summary,href:`/learning/${input.creator.id}` });
+  if(input.topic)entries.push({ id:`topic-${input.topic.id}`,kind:"topic",label:"今天最值得考虑的选题",title:input.topic.topic,description:input.topic.differentiated_angle,href:`/learning?topic=${input.topic.id}` });
+  return entries.slice(0,5);
 }
 
 export async function ensureDailyBrief(admin:SupabaseClient,workspaceId:string,date:string,options:{ force?:boolean }={}) {
@@ -28,7 +28,8 @@ export async function ensureDailyBrief(admin:SupabaseClient,workspaceId:string,d
     admin.from("trend_clusters").select("id,title,summary,status").eq("workspace_id",workspaceId).in("status",["rising","emerging"]).order("evidence_count",{ascending:false}).limit(1),
   ]);
   for (const result of [eventsResult,creatorsResult,topicsResult,trendsResult]) if (result.error) throw new Error(result.error.message);
-  const entries=buildDailyBriefEntries({events:eventsResult.data ?? [],trend:trendsResult.data?.[0],creator:creatorsResult.data?.[0],topic:topicsResult.data?.[0]});
+  const eventIds=(eventsResult.data??[]).map(item=>item.id);const{data:analyses,error:analysisError}=eventIds.length?await admin.from("event_analyses").select("cluster_id,happened,real_change,why_important").in("cluster_id",eventIds).eq("is_current",true).eq("status","ready"):{data:[],error:null};if(analysisError)throw new Error(analysisError.message);const analysisMap=new Map((analyses??[]).map(item=>[item.cluster_id,item]));const editorialEvents=(eventsResult.data??[]).map(item=>{const analysis=analysisMap.get(item.id);return{...item,summary:analysis?[analysis.happened,analysis.real_change,analysis.why_important].filter(Boolean).join(" "):item.summary};});
+  const entries=buildDailyBriefEntries({events:editorialEvents,trend:trendsResult.data?.[0],creator:creatorsResult.data?.[0],topic:topicsResult.data?.[0]});
   const payload={ workspace_id:workspaceId,brief_date:date,timezone:"Asia/Shanghai",status:"ready",summary:{ entries,generatedFrom:"database",generatedAt:new Date().toISOString() },completed_at:new Date().toISOString() };
   const { data,error }=await admin.from("daily_briefs").upsert(payload,{onConflict:"workspace_id,brief_date"}).select("id").single();
   if (error || !data) throw new Error(error?.message ?? "生成简报失败");

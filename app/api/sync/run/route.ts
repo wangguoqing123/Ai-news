@@ -1,20 +1,3 @@
-import { requireRequestContext } from "../../../../lib/server/auth";
-import { getSupabaseAdmin } from "../../../../lib/server/supabase-admin";
-import { syncAIHot } from "../../../../lib/services/aihot-sync";
-import { syncYouTubeChannels,syncYouTubeChannelVideos } from "../../../../lib/services/youtube-sync";
-import { syncGetNotesApi } from "../../../../lib/services/get-notes-api-sync";
-
-export async function POST(request:Request){
-  try{
-    const context=await requireRequestContext(request);if(context.mode==="demo")return Response.json({ok:true,mode:"demo",results:[]});
-    const body=await request.json().catch(()=>({})) as {sources?:string[]};const sources=body.sources?.length?body.sources:["aihot","youtube"];
-    const admin=getSupabaseAdmin();const results:Array<unknown>=[];
-    if(sources.includes("aihot"))results.push(await syncAIHot(admin,context.workspaceId));
-    if(sources.includes("youtube")){results.push(await syncYouTubeChannels(admin,context.workspaceId));results.push(await syncYouTubeChannelVideos(admin,context.workspaceId));}
-    if(sources.includes("get_notes")){
-      if(process.env.GET_NOTES_MODE==="api")results.push(await syncGetNotesApi(admin,context.workspaceId));
-      else results.push({source:"get_notes",status:process.env.GET_NOTES_MODE==="webhook"?"webhook_waiting":"worker_required",message:"CLI 模式只在独立 Worker 中运行"});
-    }
-    return Response.json({ok:true,mode:"verified_live",results});
-  }catch(error){if(error instanceof Response)return error;return Response.json({error:error instanceof Error?error.message:"同步失败"},{status:500});}
-}
+import{z}from"zod";import{enqueueJob}from"../../../../lib/services/ingest";import{requireRequestContext}from"../../../../lib/server/auth";import{getSupabaseAdmin}from"../../../../lib/server/supabase-admin";
+const schema=z.object({sources:z.array(z.enum(["aihot","youtube","get_notes"])).min(1).max(3).default(["aihot","youtube"]),priority:z.enum(["normal","high"]).optional()});
+export async function POST(request:Request){try{const context=await requireRequestContext(request);const parsed=schema.safeParse(await request.json().catch(()=>({})));if(!parsed.success)return Response.json({error:"同步来源参数无效",issues:parsed.error.issues},{status:400});if(context.mode==="demo")return Response.json({ok:true,mode:"demo",jobs:[]},{status:202});const admin=getSupabaseAdmin();const bucket=Math.floor(Date.now()/300_000);const priority=parsed.data.priority==="high"?200:120;const types:string[]=[];if(parsed.data.sources.includes("aihot"))types.push("sync_aihot");if(parsed.data.sources.includes("youtube"))types.push("sync_youtube_subscriptions","sync_youtube_channel_videos");if(parsed.data.sources.includes("get_notes"))types.push("sync_get_notes");const jobs=[];for(const type of types)jobs.push(await enqueueJob(admin,{workspaceId:context.workspaceId,type,idempotencyKey:`manual:${type}:${bucket}`,payload:{requestedAt:new Date().toISOString(),source:type.replace(/^sync_/,"")},priority}));return Response.json({ok:true,mode:"live",jobs},{status:202});}catch(error){if(error instanceof Response)return error;return Response.json({error:error instanceof Error?error.message:"创建同步任务失败"},{status:500});}}

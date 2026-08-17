@@ -1,4 +1,53 @@
-export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "dead_letter";
+export type JobStatus = "queued" | "running" | "blocked" | "succeeded" | "failed" | "dead_letter";
+
+export type DependencyType = "ai_provider" | "transcript_provider" | "content_profile";
+
+export type BlockedJobResult = {
+  status:"blocked";
+  dependencyType:DependencyType;
+  reason:string;
+  nextRetryAt?:string;
+};
+
+export function blockedJob(
+  dependencyType:DependencyType,
+  reason:string,
+  now=new Date(),
+):BlockedJobResult {
+  return {
+    status:"blocked",
+    dependencyType,
+    reason,
+    nextRetryAt:new Date(now.getTime()+15*60_000).toISOString(),
+  };
+}
+
+export function isBlockedJobResult(value:unknown):value is BlockedJobResult {
+  return Boolean(value && typeof value === "object" && (value as {status?:unknown}).status === "blocked");
+}
+
+export function dependencyConfigured(type:DependencyType,env:Record<string,string|undefined>=process.env) {
+  if (type === "ai_provider") return Boolean(env.AI_API_KEY && env.AI_MODEL && env.AI_EMBEDDING_MODEL);
+  if (type === "transcript_provider") return Boolean(env.TRANSCRIPT_PROVIDER && env.TRANSCRIPT_PROVIDER !== "manual_required");
+  return true;
+}
+
+export function heartbeatIntervalMs(leaseMs:number) {
+  return Math.max(30_000,Math.min(60_000,Math.floor(leaseMs/4)));
+}
+
+export function shouldRecoverLease(input:{
+  now:number;
+  leaseExpiresAt:number;
+  heartbeatAt:number|null;
+  workerLastSeenAt:number|null;
+  safetyMs?:number;
+}) {
+  const safety=input.safetyMs ?? 120_000;
+  return input.leaseExpiresAt < input.now
+    && (input.heartbeatAt === null || input.heartbeatAt < input.now-safety)
+    && (input.workerLastSeenAt === null || input.workerLastSeenAt < input.now-safety);
+}
 
 export function nextRetryAt(attempt: number, now = new Date()): Date {
   const cappedAttempt = Math.max(1, Math.min(attempt, 10));
@@ -33,6 +82,7 @@ export const JOB_TYPES = [
   "analyze_creator_content",
   "analyze_competitor_content",
   "analyze_competitor",
+  "analyze_cross_source",
   "generate_daily_brief",
   "generate_topic",
   "generate_quiz",

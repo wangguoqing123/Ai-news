@@ -9,6 +9,7 @@ const docker=(args,options={})=>execFileSync("docker",args,{encoding:"utf8",maxB
 const psql=(sql)=>docker(["exec","-i",container,"psql","-v","ON_ERROR_STOP=1","-U","postgres","-d","postgres","-q"],{input:sql});
 const v1=fs.readFileSync(new URL("../supabase/migrations/202608170001_signal_desk.sql",import.meta.url),"utf8");
 const v2=fs.readFileSync(new URL("../supabase/migrations/202608170002_signal_desk_v2.sql",import.meta.url),"utf8");
+const v3=fs.readFileSync(new URL("../supabase/migrations/202608170003_signal_desk_reliable_daily.sql",import.meta.url),"utf8");
 const userOne="11111111-1111-4111-8111-111111111111";
 const userTwo="22222222-2222-4222-8222-222222222222";
 let client;
@@ -20,15 +21,21 @@ try {
   psql(v1);
   psql(`insert into auth.users(id,raw_user_meta_data) values ('${userOne}','{"full_name":"Owner One"}'),('${userTwo}','{"full_name":"Owner Two"}');`);
   psql(v2);
+  psql(v3);
   const port=Number(docker(["port",container,"5432/tcp"]).split(":").at(-1));
   client=new Client({host:"127.0.0.1",port,user:"postgres",password:"postgres",database:"postgres"});await client.connect();
   const workspaces=await client.query("select id,owner_id from workspaces order by owner_id");assert.equal(workspaces.rowCount,2);
   const workspaceOne=workspaces.rows.find((row)=>row.owner_id===userOne).id;const workspaceTwo=workspaces.rows.find((row)=>row.owner_id===userTwo).id;
   assert.equal((await client.query("select count(*)::int as count from job_schedules")).rows[0].count,8);
+  const activeProfile=(await client.query("select version,identity_text,focus_topics from content_profiles where workspace_id=$1 and is_active=true",[workspaceOne])).rows[0];assert.match(activeProfile.identity_text,/AI 内容创作者/);assert.ok(activeProfile.focus_topics.includes("Claude Code"));
   const source=(await client.query("insert into sources(workspace_id,type,external_id,name) values($1,'aihot','aihot','AIHot') returning id",[workspaceOne])).rows[0];
   const run=(await client.query("insert into sync_runs(workspace_id,source_id,status) values($1,$2,'succeeded') returning id",[workspaceOne,source.id])).rows[0];
   const raw=(await client.query("insert into raw_ingest_records(workspace_id,source_id,sync_run_id,external_id,payload,payload_hash) values($1,$2,$3,'real-1',$4,'hash-1') returning id",[workspaceOne,source.id,run.id,{title:"真实 AIHot 内容",links:{original:"https://example.com/official"}}])).rows[0];
   const content=(await client.query("insert into content_items(workspace_id,source_id,external_id,content_type,title,canonical_url,published_at,raw_record_id) values($1,$2,'real-1','article','真实 AIHot 内容','https://example.com/official',now(),$3) returning id",[workspaceOne,source.id,raw.id])).rows[0];
+  await client.query("insert into content_versions(workspace_id,content_id,version,input_hash,title) values($1,$2,1,'input-v1','真实 AIHot 内容')",[workspaceOne,content.id]);
+  await client.query("insert into jobs(workspace_id,type,status,idempotency_key,blocked_reason,dependency_type,next_retry_at) values($1,'analyze_creator_content','blocked','analysis:block','AI Provider 未配置','ai_provider',now()+interval '15 minutes')",[workspaceOne]);
+  assert.equal((await client.query("select dependency_type from jobs where idempotency_key='analysis:block'")).rows[0].dependency_type,"ai_provider");
+  await client.query("insert into worker_heartbeats(worker_id,status,last_seen_at) values('worker-test','active',now())");assert.equal((await client.query("select count(*)::int as count from worker_heartbeats where status='active'")).rows[0].count,1);
   const persisted=await client.query("select r.payload->>'title' as raw_title,c.title,c.raw_record_id from content_items c join raw_ingest_records r on r.id=c.raw_record_id where c.id=$1",[content.id]);
   assert.equal(persisted.rows[0].raw_title,"真实 AIHot 内容");assert.equal(persisted.rows[0].raw_record_id,raw.id);
   await assert.rejects(()=>client.query("insert into raw_ingest_records(workspace_id,source_id,sync_run_id,external_id,payload,payload_hash) values($1,$2,$3,'real-1','{}','hash-1')",[workspaceOne,source.id,run.id]),/duplicate key/i);
@@ -44,7 +51,8 @@ try {
   assert.equal((await client.query("select count(*)::int as count from topic_sources where topic_id=$1 and source_id=$2",[topic.id,content.id])).rows[0].count,1);
   await client.query("insert into daily_briefs(workspace_id,brief_date,timezone,status,summary,completed_at) values($1,current_date,'Asia/Shanghai','ready',$2,now())",[workspaceOne,{entries:[{kind:"event",sourceId:content.id}]}]);
   assert.equal((await client.query("select summary->'entries'->0->>'sourceId' as source_id from daily_briefs where workspace_id=$1",[workspaceOne])).rows[0].source_id,content.id);
-  console.log("database integration: migrations, AIHot raw persistence, RLS, user state, topic evidence, schedules and daily brief passed");
+  await client.query("update content_profiles set is_active=false where workspace_id=$1",[workspaceOne]);await client.query("insert into content_profiles(workspace_id,version,is_active,identity_text,content_direction,target_audience,value_criteria) values($1,2,true,'新版身份','新版方向','新版受众',$2)",[workspaceOne,{text:"真实证据"}]);assert.equal((await client.query("select version from content_profiles where workspace_id=$1 and is_active=true",[workspaceOne])).rows[0].version,2);
+  console.log("database integration: three migrations, profile versions, blocked jobs, heartbeat, RLS, user state, topic evidence, schedules and daily brief passed");
 } finally {
   if(client)await client.end().catch(()=>undefined);
   try{docker(["rm","-f",container]);}catch{ /* Container never started or was already removed. */ }

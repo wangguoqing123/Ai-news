@@ -26,12 +26,12 @@ test("event clustering groups the same launch and separates unrelated changes",(
 });
 
 test("cross-source entities only expose recognized comparable topics",()=>{
-  assert.deepEqual(extractEntities("Qwen、Claude 和 Codex 的多智能体工作流"),["Qwen / 千问","Codex","Claude","多智能体"]);
+  assert.deepEqual(extractEntities("Qwen、Claude 和 Codex 的多智能体工作流").sort(),["Agent","Claude","Codex","Qwen / 千问"].sort());
   assert.deepEqual(extractEntities("一条没有已知实体的普通内容"),[]);
 });
 
 test("creator analysis schema enforces recommendation and evidence structure",()=>{
-  const parsed=creatorContentAnalysisSchema.parse({summary:"摘要",contentType:"教程",targetAudience:"创作者",problemSolved:"减少重复工作",corePoints:["先验证"],learningRecommendation:"deep_learn",learningReason:"有完整实测",learningTakeaways:["保留证据"],recommendedSegments:[{startMs:1_000,endMs:4_000,title:"实测",reason:"展示结果"}],topicOpportunity:{available:true,angle:"自己复现",audience:"新手",difference:"补充失败过程",validationTask:"完成一次复现"},evidenceRefs:["content:1"],confidence:.8});
+  const parsed=creatorContentAnalysisSchema.parse({summary:"摘要",contentType:"教程",targetAudience:"创作者",problemSolved:"减少重复工作",corePoints:["先验证"],learningRecommendation:"deep_learn",learningReason:"有完整实测",learningTakeaways:["保留证据"],recommendedSegments:[{startMs:1_000,endMs:4_000,title:"实测",reason:"展示结果",segmentIds:["segment-1"]}],topicOpportunity:{available:true,angle:"自己复现",audience:"新手",difference:"补充失败过程",validationTask:"完成一次复现"},evidenceRefs:["content:1"],confidence:.8});
   assert.equal(parsed.learningRecommendation,"deep_learn");
   assert.throws(()=>creatorContentAnalysisSchema.parse({...parsed,learningRecommendation:"must_watch"}));
 });
@@ -80,7 +80,8 @@ test("learning details and topics are dynamic and persist source relations",()=>
   assert.match(read("app/api/learning/[id]/progress/route.ts"),/learning_progress/);
   assert.match(read("app/api/learning/[id]/artifacts/route.ts"),/knowledge_card_sources/);
   const topics=read("app/api/topics/route.ts");
-  assert.match(topics,/sources\.length/);
+  assert.match(topics,/sources:z\.array\(sourceSchema\)\.min\(1\)/);
+  assert.match(topics,/evidenceFor/);
   assert.match(topics,/topic_sources/);
   assert.match(topics,/source_id:source\.id/);
 });

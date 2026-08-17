@@ -11,10 +11,17 @@ export type TranscriptResult = {
   segments: Array<{ startMs: number; endMs: number; text: string }>;
   provider: string;
   confidence?: number;
+  hasTimestamps?:boolean;
+  sourceUrl?:string;
+  metadata?:Record<string,unknown>;
 };
 
 export interface TranscriptProvider {
   name: string;
   canHandle(input: TranscriptRequest): Promise<boolean>;
   fetch(input: TranscriptRequest): Promise<TranscriptResult>;
+}
+
+export class TranscriptUnavailableError extends Error {
+  constructor(message:string,readonly code="unavailable"){super(message);this.name="TranscriptUnavailableError";}
 }
