@@ -68,9 +68,10 @@ PLIST
 plutil -lint "$TEMP_PLIST" >/dev/null
 install -m 600 "$TEMP_PLIST" "$PLIST"
 launchctl bootout "gui/$UID/$LABEL" >/dev/null 2>&1 || true
-if ! launchctl bootstrap "gui/$UID" "$PLIST"; then
+for attempt in 1 2 3 4 5; do
+  if launchctl bootstrap "gui/$UID" "$PLIST"; then break; fi
+  if [[ "$attempt" == "5" ]]; then exit 1; fi
   sleep 2
-  launchctl bootstrap "gui/$UID" "$PLIST"
-fi
+done
 launchctl kickstart -k "gui/$UID/$LABEL"
 echo "$LABEL installed"
