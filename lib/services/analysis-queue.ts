@@ -12,12 +12,12 @@ export async function activeProfileVersion(admin:SupabaseClient,workspaceId:stri
 
 export async function enqueueContentAnalysis(admin:SupabaseClient,input:{workspaceId:string;contentId:string;type?:"analyze_creator_content"|"analyze_competitor_content";contentHash?:string|null;priority?:number;requeueExisting?:boolean}){
   const [{data:content,error:contentError},{data:transcript,error:transcriptError},profileVersion]=await Promise.all([
-    admin.from("content_items").select("analysis_input_hash,metadata").eq("workspace_id",input.workspaceId).eq("id",input.contentId).single(),
+    admin.from("content_items").select("title,summary,body,author,duration_seconds,analysis_input_hash,metadata,source:sources(type,name)").eq("workspace_id",input.workspaceId).eq("id",input.contentId).single(),
     admin.from("transcripts").select("input_hash").eq("workspace_id",input.workspaceId).eq("content_id",input.contentId).eq("is_current",true).eq("status","ready").maybeSingle(),
     activeProfileVersion(admin,input.workspaceId),
   ]);
   if(contentError||!content)throw new Error(contentError?.message??"内容不存在");if(transcriptError&&transcriptError.code!=="42P01")throw new Error(transcriptError.message);
-  const baseHash=input.contentHash??content.analysis_input_hash??String(record(content.metadata).analysisInputHash??"legacy");
+  const derivedContentHash=sha256(JSON.stringify({title:content.title,summary:content.summary,body:content.body,author:content.author,durationSeconds:content.duration_seconds,source:content.source}));const baseHash=input.contentHash??content.analysis_input_hash??(typeof record(content.metadata).analysisInputHash==="string"?String(record(content.metadata).analysisInputHash):derivedContentHash);if(!content.analysis_input_hash){const backfill=await admin.from("content_items").update({analysis_input_hash:baseHash}).eq("id",input.contentId).is("analysis_input_hash",null);if(backfill.error)throw new Error(backfill.error.message);}
   const canonicalHash=contentAnalysisInputHash({contentHash:baseHash,transcriptHash:transcript?.input_hash});const inputHash=input.requeueExisting?sha256(`${canonicalHash}:rerun:${Math.floor(Date.now()/300_000)}`):canonicalHash;const type=input.type??"analyze_creator_content";
   if(input.requeueExisting){const superseded=await admin.from("jobs").update({status:"cancelled",result:{reason:"superseded_by_new_analysis_input",inputHash},locked_at:null,locked_by:null,lease_expires_at:null,heartbeat_at:null}).eq("workspace_id",input.workspaceId).eq("type",type).in("status",["queued","blocked"]).contains("payload",{contentId:input.contentId});if(superseded.error)throw new Error(superseded.error.message);}
   const identity={entityType:"content" as const,entityId:input.contentId,inputHash,promptVersion:CREATOR_PROMPT_VERSION,profileVersion,analysisVersion:ANALYSIS_VERSION};

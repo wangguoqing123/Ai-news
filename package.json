@@ -19,6 +19,7 @@
     "worker": "tsx jobs-worker/index.ts",
     "worker:install": "bash scripts/install-worker-launchagent.sh",
     "worker:status": "zsh scripts/worker-status.sh",
+    "analysis:backfill-hashes": "node --env-file=.env.local --import tsx scripts/backfill-analysis-hashes.ts",
     "verify:live": "tsx scripts/verify-live-connectors.ts",
     "sync:live": "tsx scripts/sync-live.ts"
   },
