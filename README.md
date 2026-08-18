@@ -32,6 +32,8 @@ npm run dev
 supabase/migrations/202608170001_signal_desk.sql
 supabase/migrations/202608170002_signal_desk_v2.sql
 supabase/migrations/202608170003_signal_desk_reliable_daily.sql
+supabase/migrations/202608180001_signal_desk_concurrency.sql
+supabase/migrations/202608180002_signal_desk_migration_audit.sql
 ```
 
 迁移会建立扩展、核心表、默认工作区触发器与 RLS。不要把 Service Role Key 放入浏览器环境变量。

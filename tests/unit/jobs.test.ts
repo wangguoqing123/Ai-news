@@ -15,6 +15,7 @@ test("blocked jobs preserve dependency semantics and can be resumed after config
   assert.equal(blocked.status,"blocked");assert.equal(blocked.nextRetryAt,"2026-08-17T00:15:00.000Z");
   assert.equal(dependencyConfigured("ai_provider",{}),false);
   assert.equal(dependencyConfigured("ai_provider",{AI_API_KEY:"key",AI_MODEL:"model",AI_EMBEDDING_MODEL:"embed"}),true);
+  assert.equal(dependencyConfigured("ai_budget",{}),false);
 });
 
 test("analysis idempotency includes content, prompt, profile and analysis versions",()=>{

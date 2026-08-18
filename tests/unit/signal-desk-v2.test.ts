@@ -85,3 +85,10 @@ test("learning details and topics are dynamic and persist source relations",()=>
   assert.match(topics,/topic_sources/);
   assert.match(topics,/source_id:source\.id/);
 });
+
+test("new analysis input supersedes queued work for the same content",()=>{
+  const queue=read("lib/services/analysis-queue.ts");
+  assert.match(queue,/status:"cancelled"/);
+  assert.match(queue,/superseded_by_new_analysis_input/);
+  assert.match(queue,/contains\("payload",\{contentId:input\.contentId\}\)/);
+});

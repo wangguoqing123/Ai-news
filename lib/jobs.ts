@@ -1,6 +1,6 @@
-export type JobStatus = "queued" | "running" | "blocked" | "succeeded" | "failed" | "dead_letter";
+export type JobStatus = "queued" | "running" | "blocked" | "succeeded" | "failed" | "dead_letter" | "cancelled";
 
-export type DependencyType = "ai_provider" | "transcript_provider" | "content_profile";
+export type DependencyType = "ai_provider" | "ai_budget" | "transcript_provider" | "content_profile";
 
 export type BlockedJobResult = {
   status:"blocked";
@@ -28,6 +28,7 @@ export function isBlockedJobResult(value:unknown):value is BlockedJobResult {
 
 export function dependencyConfigured(type:DependencyType,env:Record<string,string|undefined>=process.env) {
   if (type === "ai_provider") return Boolean(env.AI_API_KEY && env.AI_MODEL && env.AI_EMBEDDING_MODEL);
+  if (type === "ai_budget") return false;
   if (type === "transcript_provider") return Boolean(env.TRANSCRIPT_PROVIDER && env.TRANSCRIPT_PROVIDER !== "manual_required");
   return true;
 }
