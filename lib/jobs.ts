@@ -9,6 +9,10 @@ export type BlockedJobResult = {
   nextRetryAt?:string;
 };
 
+export class RetryableJobError extends Error{
+  constructor(message:string,readonly retryAfterMs:number,readonly scope:"job"|"job_type"|"transcript_pipeline"="job"){super(message);this.name="RetryableJobError";}
+}
+
 export function blockedJob(
   dependencyType:DependencyType,
   reason:string,
@@ -27,7 +31,7 @@ export function isBlockedJobResult(value:unknown):value is BlockedJobResult {
 }
 
 export function dependencyConfigured(type:DependencyType,env:Record<string,string|undefined>=process.env) {
-  if (type === "ai_provider") return Boolean(env.AI_API_KEY && env.AI_MODEL && env.AI_EMBEDDING_MODEL);
+  if (type === "ai_provider") return env.AI_PROVIDER === "codex_cli" ? Boolean(env.CODEX_CLI_PATH) : Boolean(env.AI_API_KEY && env.AI_MODEL && env.AI_EMBEDDING_MODEL);
   if (type === "ai_budget") return false;
   if (type === "transcript_provider") return Boolean(env.TRANSCRIPT_PROVIDER && env.TRANSCRIPT_PROVIDER !== "manual_required");
   return true;

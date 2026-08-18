@@ -20,7 +20,7 @@ Worker 使用 PostgreSQL 队列，不依赖 Redis。至少配置：
 - `DATABASE_URL`
 - `DATABASE_SSL`
 - `WORKER_NAME`
-- AI Provider 变量（需要运行 AI Job 时）
+- AI Provider 变量。默认 `AI_PROVIDER=codex_cli`，复用本机 Codex CLI 已有登录态，不复制凭据、不需要 API Key；需要设置 `CODEX_CLI_PATH`
 - Transcript Provider 变量（`TRANSCRIPT_PROVIDER_CHAIN=api,yt_dlp`，并配置对应 API 或 Worker 中的 `yt-dlp`）
 
 进程通过 SIGTERM / SIGINT 优雅停止。Worker 每 30～60 秒续租当前 Job，并写入 `worker_heartbeats`；清理任务只有在 Lease、Job heartbeat 和 Worker heartbeat 都超时后才恢复任务。部署平台的健康检查应独立于 Web。

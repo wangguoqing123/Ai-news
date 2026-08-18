@@ -18,7 +18,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "worker": "tsx jobs-worker/index.ts",
     "worker:install": "bash scripts/install-worker-launchagent.sh",
-    "worker:status": "bash scripts/worker-status.sh",
+    "worker:status": "zsh scripts/worker-status.sh",
     "verify:live": "tsx scripts/verify-live-connectors.ts",
     "sync:live": "tsx scripts/sync-live.ts"
   },

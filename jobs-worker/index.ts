@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { CodexCliProvider } from "../lib/ai/codex-cli-provider";
+import { setWorkerAIProviderFactory } from "../lib/ai/runtime";
 import { ensureDailyBrief } from "../lib/daily-brief/generate";
 import {
   dependencyConfigured,
@@ -7,6 +9,7 @@ import {
   isBlockedJobResult,
   nextJobStatus,
   nextRetryAt,
+  RetryableJobError,
   type BlockedJobResult,
   type JobType,
 } from "../lib/jobs";
@@ -19,6 +22,7 @@ import { syncYouTubeChannels,syncYouTubeChannelVideos } from "../lib/services/yo
 import { syncGetNotesCli } from "../lib/workers/get-notes-cli";
 
 process.env.WORKER_RUNTIME="true";
+if(process.env.AI_PROVIDER==="codex_cli")setWorkerAIProviderFactory(()=>new CodexCliProvider());
 
 const { Pool }=pg;
 const databaseUrl=process.env.DATABASE_URL;
@@ -181,7 +185,7 @@ async function blockJob(job:ClaimedJob,result:BlockedJobResult){
 async function failJob(job:ClaimedJob,error:unknown){
   const message=error instanceof Error?error.message:String(error);
   const status=nextJobStatus(job.attempt,job.max_attempts);
-  const runAt=nextRetryAt(job.attempt);
+  const runAt=error instanceof RetryableJobError?new Date(Date.now()+error.retryAfterMs):nextRetryAt(job.attempt);
   const transition=await pool.query(`
     update public.jobs
     set status=$2,run_at=$3,error=$4,locked_at=null,locked_by=null,
@@ -190,6 +194,14 @@ async function failJob(job:ClaimedJob,error:unknown){
     returning id
   `,[job.id,status,runAt,message,workerId]);
   if(transition.rowCount!==1)return false;
+  if(error instanceof RetryableJobError&&error.scope!=="job"){
+    const delayedTypes=error.scope==="transcript_pipeline"?["fetch_transcript","analyze_creator_content"]:[job.type];
+    await pool.query(`
+      update public.jobs
+      set run_at=greatest(run_at,$2),error=$3
+      where workspace_id=$1 and type=any($4::text[]) and status='queued'
+    `,[job.workspace_id,runAt,message,delayedTypes]);
+  }
   await pool.query(`
     update public.job_attempts
     set status='failed',error=$4,finished_at=now()

@@ -20,6 +20,7 @@ export type StructuredGenerationResult<T>={
 export interface AIProvider {
   readonly name:string;
   readonly model:string;
+  readonly supportsEmbeddings:boolean;
   generateStructured<T>(request: StructuredGenerationRequest<T>): Promise<T>;
   generateStructuredDetailed<T>(request:StructuredGenerationRequest<T>):Promise<StructuredGenerationResult<T>>;
   embed(input: string[]): Promise<number[][]>;
@@ -37,6 +38,7 @@ export class OpenAICompatibleProvider implements AIProvider {
   constructor(config: z.input<typeof compatibleConfigSchema>) { this.config = compatibleConfigSchema.parse(config); }
   get name(){return "openai_compatible";}
   get model(){return this.config.model;}
+  get supportsEmbeddings(){return true;}
 
   async generateStructured<T>(request: StructuredGenerationRequest<T>): Promise<T> {
     return(await this.generateStructuredDetailed(request)).data;
