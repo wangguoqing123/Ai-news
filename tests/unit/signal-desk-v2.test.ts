@@ -98,3 +98,5 @@ test("new analysis input supersedes queued work for the same content",()=>{
 });
 
 test("new transcript input supersedes stale pending fetches",()=>{const queue=read("lib/services/transcript-queue.ts");assert.match(queue,/record\(item\.payload\)\.contentHash!==input\.contentHash/);assert.match(queue,/item\.idempotency_key!==idempotencyKey/);assert.match(queue,/superseded_by_new_transcript_input/);assert.match(queue,/job\.status!=="cancelled"/);});
+
+test("event and trend queues supersede stale input hashes",()=>{const queue=read("lib/services/analysis-queue.ts");assert.match(queue,/contains\("payload",\{clusterId:input\.clusterId\}\)/);assert.match(queue,/contains\("payload",\{trendId:input\.trendId\}\)/);assert.match(queue,/cluster\.analysis_input_hash\?\?input\.inputHash/);assert.match(queue,/trend\.input_hash\?\?input\.inputHash/);});

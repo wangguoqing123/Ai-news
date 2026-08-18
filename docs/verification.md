@@ -19,7 +19,7 @@
 - `npm install`：通过；完整依赖树报告 15 个漏洞（2 low、13 high），`npm audit --omit=dev` 的生产依赖为 0 个漏洞；本轮未运行破坏性 `audit fix --force`。
 - `npm run typecheck`：通过。
 - `npm run lint`：通过，保留 4 个真实外部缩略图的 `img` 性能提示，无 error。
-- `npm run test:unit`：45/45 通过。
+- `npm run test:unit`：46/46 通过。
 - `npm run test:db`：PostgreSQL 16 + pgvector 中七份迁移、锁内两步 current 切换、Transcript 输入幂等、Worker 锁所有权、画像版本、RLS 与迁移审计通过。
 - `npm run test:e2e`：4/4 通过；其中字幕点击后播放器 `iframe src` 不变，异步同步返回 202。
 - `npm run build`：通过。
