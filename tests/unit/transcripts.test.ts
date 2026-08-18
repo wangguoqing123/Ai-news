@@ -5,6 +5,8 @@ import { TranscriptProviderChain } from "../../lib/transcripts/chain";
 import { TranscriptUnavailableError,type TranscriptProvider } from "../../lib/transcripts/types";
 import { RetryableJobError } from "../../lib/jobs";
 import { selectSubtitleLanguage } from "../../lib/transcripts/yt-dlp";
+import { IngestedTextTranscriptProvider } from "../../lib/transcripts/ingested-text";
+import { analysisTypeForTranscriptSource } from "../../lib/transcripts/persistence";
 
 test("manual transcript provider parses SRT timestamps", () => {
   const result = parseSrt("1\n00:00:01,000 --> 00:00:03,500\nHello world\n\n2\n00:00:04,000 --> 00:00:05,000\nSecond line");
@@ -19,3 +21,9 @@ test("transcript provider chain falls back after an unavailable provider",async(
 test("transcript provider chain preserves transient failures for Worker retry",async()=>{const limited:TranscriptProvider={name:"limited",async canHandle(){return true},async fetch(){throw new RetryableJobError("rate limited",900_000,"transcript_pipeline")}};await assert.rejects(()=>new TranscriptProviderChain([limited]).fetch({videoId:"v",sourceUrl:"https://youtube.com/watch?v=v"}),error=>error instanceof RetryableJobError&&error.retryAfterMs===900_000&&error.scope==="transcript_pipeline");});
 
 test("yt-dlp selects one preferred subtitle track instead of downloading every language",()=>{assert.equal(selectSubtitleLanguage({en:[{}],"zh-Hans":[{}],fr:[{}]},["zh-Hans","zh","en"]),"zh-Hans");assert.equal(selectSubtitleLanguage({"en-US":[{}],fr:[{}]},["en"]),"en-US");assert.equal(selectSubtitleLanguage({},["en"]),null);});
+
+test("yt-dlp never takes over non-YouTube connector URLs",async()=>{const previous=process.env.WORKER_RUNTIME;process.env.WORKER_RUNTIME="true";try{const provider=new (await import("../../lib/transcripts/yt-dlp")).YtDlpTranscriptProvider();assert.equal(await provider.canHandle({videoId:"post",sourceUrl:"https://www.iesdouyin.com/share/video/1",sourceType:"get_notes"}),false);assert.equal(await provider.canHandle({videoId:"video",sourceUrl:"https://www.youtube.com/watch?v=video",sourceType:"youtube"}),true);}finally{if(previous===undefined)delete process.env.WORKER_RUNTIME;else process.env.WORKER_RUNTIME=previous;}});
+
+test("verified Get Notes text becomes an honest transcript without timestamps",async()=>{const provider=new IngestedTextTranscriptProvider();const input={videoId:"post",sourceUrl:"https://example.com/post",sourceType:"get_notes" as const,inputText:"真实口述正文",language:"zh-CN",metadata:{hasTranscript:true,provenance:"verified_live"}};assert.equal(await provider.canHandle(input),true);const result=await provider.fetch(input);assert.equal(result.provider,"get_notes_ingested_text");assert.equal(result.hasTimestamps,false);assert.deepEqual(result.segments,[{startMs:0,endMs:0,text:"真实口述正文"}]);await assert.rejects(()=>provider.fetch({...input,inputText:""}),TranscriptUnavailableError);});
+
+test("Get Notes transcript updates retain competitor analysis routing",()=>{assert.equal(analysisTypeForTranscriptSource("get_notes"),"analyze_competitor_content");assert.equal(analysisTypeForTranscriptSource("youtube"),"analyze_creator_content");});

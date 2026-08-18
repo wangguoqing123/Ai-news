@@ -4,7 +4,7 @@ import { normalizedContentSchema } from "../connectors/types";
 import { clusterCrossSourceTopics } from "../clustering/cross-source";
 import { ensureDailyBrief } from "../daily-brief/generate";
 import { ensureSource,finishSyncRun,persistNormalizedContent,startSyncRun } from "../services/ingest";
-import { enqueueContentAnalysis } from "../services/analysis-queue";
+import { enqueueGetNotesProcessing } from "../services/get-notes-processing";
 
 type Blogger={follow_id:string|number;account_name:string;account_icon?:string;platform?:string;account_url?:string};
 type ContentSummary={post_id_alias:string;post_title?:string;post_summary?:string;post_type?:string;publish_time?:string};
@@ -59,7 +59,7 @@ export async function syncGetNotesCli(admin:SupabaseClient,workspaceId:string,op
             const title=(detail.post_name ?? detail.post_title ?? summary.post_title ?? "未命名竞品内容").trim();const body=detail.post_media_text ?? detail.post_name ?? null;
             const normalizedItem=normalizedContentSchema.parse({externalId:summary.post_id_alias,contentType:detail.post_type ?? summary.post_type ?? "article",title,summary:detail.post_summary ?? summary.post_summary ?? null,body,author:subscription.name,canonicalUrl:detail.post_url || null,publishedAt:publishedAt ?? dateTime(detail.post_create_time),updatedAt:dateTime(detail.post_create_time),language:"zh-CN",durationSeconds:null,thumbnailUrl:null,tags:[],metrics:{likes:null,comments:null,saves:null,shares:null},sourceMetadata:{platform:previous.platform ?? "other",creatorAvatarUrl:previous.iconUrl ?? null,followId:subscription.external_id,knowledgeBaseId,interactionAvailable:false,interactionStatus:"unavailable",hasTranscript:Boolean(detail.post_media_text),transcriptStatus:detail.post_media_text ? "text_only_no_timestamps" : "unavailable",creatorAnalysis:null,provenance:"verified_live"}});
             const persisted=await persistNormalizedContent(admin,{workspaceId,sourceId:source.id,sourceType:"get_notes",syncRunId:runId,raw:{summary,detail,creator:{followId:subscription.external_id,name:subscription.name,platform:previous.platform}},normalized:normalizedItem});normalized+=1;if(persisted.duplicateOfId)duplicates+=1;
-            if(persisted.shouldAnalyze)await enqueueContentAnalysis(admin,{workspaceId,contentId:persisted.id,type:"analyze_competitor_content",contentHash:persisted.contentHash,priority:55});
+            if(persisted.shouldAnalyze)await enqueueGetNotesProcessing(admin,{workspaceId,contentId:persisted.id,contentHash:persisted.contentHash,hasTranscript:Boolean(detail.post_media_text)});
           });
           hasMore=list.hasMore;page+=1;
         }

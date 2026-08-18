@@ -26,6 +26,7 @@ OAuth scope 仅请求 `https://www.googleapis.com/auth/youtube.readonly`。订�
 
 字幕不是 YouTube Data API 的必然能力。`TranscriptProvider` 独立于 YouTube Connector，现有链支持：
 
+- `ingested_text`：复用 Get 笔记真实连接器返回且标记为口述正文的文本，明确保存为无时间轴 Transcript；
 - `api`：通过 `TRANSCRIPT_API_BASE_URL`、`TRANSCRIPT_API_KEY` 和可配置的 `TRANSCRIPT_API_MAPPING` 读取字幕；
 - `yt_dlp`：仅在独立 Worker 中运行，先取人工字幕，再取自动字幕；
 - `manual_upload`：学习页上传 SRT、VTT 或 TXT。

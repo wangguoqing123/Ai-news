@@ -3,6 +3,10 @@ export type TranscriptRequest = {
   sourceUrl: string;
   preferredLanguages?: string[];
   audioUrl?: string;
+  sourceType?: "aihot" | "youtube" | "get_notes";
+  inputText?: string | null;
+  language?: string | null;
+  metadata?: Record<string, unknown>;
 };
 
 export type TranscriptResult = {

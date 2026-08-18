@@ -12,6 +12,8 @@ const v2=fs.readFileSync(new URL("../supabase/migrations/202608170002_signal_des
 const v3=fs.readFileSync(new URL("../supabase/migrations/202608170003_signal_desk_reliable_daily.sql",import.meta.url),"utf8");
 const v4=fs.readFileSync(new URL("../supabase/migrations/202608180001_signal_desk_concurrency.sql",import.meta.url),"utf8");
 const v5=fs.readFileSync(new URL("../supabase/migrations/202608180002_signal_desk_migration_audit.sql",import.meta.url),"utf8");
+const v6=fs.readFileSync(new URL("../supabase/migrations/202608180003_signal_desk_transcript_idempotency.sql",import.meta.url),"utf8");
+const v7=fs.readFileSync(new URL("../supabase/migrations/202608180004_signal_desk_activation_order.sql",import.meta.url),"utf8");
 const userOne="11111111-1111-4111-8111-111111111111";
 const userTwo="22222222-2222-4222-8222-222222222222";
 let client;
@@ -26,12 +28,15 @@ try {
   psql(v3);
   psql(v4);
   psql(v5);
+  psql(v6);
+  psql(v7);
   const port=Number(docker(["port",container,"5432/tcp"]).split(":").at(-1));
   client=new Client({host:"127.0.0.1",port,user:"postgres",password:"postgres",database:"postgres"});await client.connect();
   const workspaces=await client.query("select id,owner_id from workspaces order by owner_id");assert.equal(workspaces.rowCount,2);
   const workspaceOne=workspaces.rows.find((row)=>row.owner_id===userOne).id;const workspaceTwo=workspaces.rows.find((row)=>row.owner_id===userTwo).id;
   assert.equal((await client.query("select count(*)::int as count from job_schedules")).rows[0].count,8);
-  assert.equal((await client.query("select count(*)::int as count from signal_desk_migrations")).rows[0].count,4);
+  assert.equal((await client.query("select count(*)::int as count from signal_desk_migrations")).rows[0].count,6);
+  for(const name of ["activate_creator_content_analysis","activate_event_analysis","activate_transcript"]){const definition=(await client.query("select pg_get_functiondef(p.oid) as definition from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname=$1",[name])).rows[0].definition;assert.match(definition,/set is_current=false/i);assert.match(definition,/set is_current=true/i);}
   const activeProfile=(await client.query("select version,identity_text,focus_topics from content_profiles where workspace_id=$1 and is_active=true",[workspaceOne])).rows[0];assert.match(activeProfile.identity_text,/AI 内容创作者/);assert.ok(activeProfile.focus_topics.includes("Claude Code"));
   const source=(await client.query("insert into sources(workspace_id,type,external_id,name) values($1,'aihot','aihot','AIHot') returning id",[workspaceOne])).rows[0];
   const run=(await client.query("insert into sync_runs(workspace_id,source_id,status) values($1,$2,'succeeded') returning id",[workspaceOne,source.id])).rows[0];
@@ -50,6 +55,8 @@ try {
   const transcriptOne=(await client.query("insert into transcripts(workspace_id,content_id,language,provider,status,is_current) values($1,$2,'en','test','ready',true) returning id",[workspaceOne,content.id])).rows[0];
   const transcriptTwo=(await client.query("insert into transcripts(workspace_id,content_id,language,provider,status,is_current) values($1,$2,'zh','test','ready',false) returning id",[workspaceOne,content.id])).rows[0];
   await client.query("select public.activate_transcript($1,$2,$3)",[workspaceOne,content.id,transcriptTwo.id]);assert.deepEqual((await client.query("select id from transcripts where content_id=$1 and is_current=true",[content.id])).rows.map(row=>row.id),[transcriptTwo.id]);
+  await client.query("update transcripts set input_hash='same-transcript-input' where id=$1",[transcriptTwo.id]);
+  await assert.rejects(()=>client.query("insert into transcripts(workspace_id,content_id,language,provider,status,input_hash,is_current) values($1,$2,'zh','test','ready','same-transcript-input',false)",[workspaceOne,content.id]),/duplicate key/i);
   await client.query("insert into jobs(workspace_id,type,status,idempotency_key,blocked_reason,dependency_type,next_retry_at) values($1,'analyze_creator_content','blocked','analysis:block','AI Provider 未配置','ai_provider',now()+interval '15 minutes')",[workspaceOne]);
   assert.equal((await client.query("select dependency_type from jobs where idempotency_key='analysis:block'")).rows[0].dependency_type,"ai_provider");
   const ownershipJob=(await client.query("insert into jobs(workspace_id,type,status,idempotency_key,locked_by,locked_at,lease_expires_at,attempt) values($1,'analyze_creator_content','running','ownership:race','worker-b',now(),now()+interval '5 minutes',2) returning id",[workspaceOne])).rows[0];
@@ -75,7 +82,7 @@ try {
   assert.equal((await client.query("select summary->'entries'->0->>'sourceId' as source_id from daily_briefs where workspace_id=$1",[workspaceOne])).rows[0].source_id,content.id);
   const profilePayload={identity_text:"新版身份",content_direction:"新版方向",target_audience:"新版受众",formats:["图文"],focus_topics:["AI 编程"],excluded_topics:[],products:"产品",value_criteria:{text:"真实证据"},forbidden_content:[],historical_topics:[]};await client.query("select public.create_content_profile_version($1,$2)",[workspaceOne,profilePayload]);await client.query("select public.create_content_profile_version($1,$2)",[workspaceOne,{...profilePayload,identity_text:"最新身份"}]);const currentProfiles=await client.query("select version,identity_text from content_profiles where workspace_id=$1 and is_active=true",[workspaceOne]);assert.deepEqual(currentProfiles.rows,[{version:3,identity_text:"最新身份"}]);
   assert.equal(eventAnalysisOne.id===eventAnalysisTwo.id,false);assert.equal(transcriptOne.id===transcriptTwo.id,false);assert.equal(creatorAnalysisOne.id===creatorAnalysisTwo.id,false);
-  console.log("database integration: five migrations, transactional current switches, worker ownership, RLS, audit and schedules passed");
+  console.log("database integration: seven migrations, ordered current switches, transcript idempotency, worker ownership, RLS, audit and schedules passed");
 } finally {
   if(client)await client.end().catch(()=>undefined);
   try{docker(["rm","-f",container]);}catch{ /* Container never started or was already removed. */ }

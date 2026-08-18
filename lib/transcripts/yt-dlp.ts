@@ -34,7 +34,7 @@ export function selectSubtitleLanguage(catalog:SubtitleCatalog,preferredLanguage
 
 export class YtDlpTranscriptProvider implements TranscriptProvider{
   readonly name="yt_dlp";
-  async canHandle(){return process.env.WORKER_RUNTIME==="true";}
+  async canHandle(input:TranscriptRequest){if(process.env.WORKER_RUNTIME!=="true")return false;return input.sourceType?input.sourceType==="youtube":/(?:youtube\.com|youtu\.be)/i.test(input.sourceUrl);}
   async fetch(input:TranscriptRequest):Promise<TranscriptResult>{
     if(process.env.WORKER_RUNTIME!=="true")throw new Error("yt-dlp 只允许在独立 Worker 中运行");
     const directory=await mkdtemp(join(tmpdir(),"signal-transcript-"));
