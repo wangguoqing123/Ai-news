@@ -19,33 +19,33 @@
 - `npm install`：通过；完整依赖树报告 15 个漏洞（2 low、13 high），`npm audit --omit=dev` 的生产依赖为 0 个漏洞；本轮未运行破坏性 `audit fix --force`。
 - `npm run typecheck`：通过。
 - `npm run lint`：通过，保留 4 个真实外部缩略图的 `img` 性能提示，无 error。
-- `npm run test:unit`：34/34 通过。
-- `npm run test:db`：PostgreSQL 16 + pgvector 中三份迁移、画像版本、blocked Job、heartbeat、RLS 与证据关系通过。
+- `npm run test:unit`：37/37 通过。
+- `npm run test:db`：PostgreSQL 16 + pgvector 中五份迁移、事务型 current 切换、Worker 锁所有权、画像版本、RLS 与迁移审计通过。
 - `npm run test:e2e`：4/4 通过；其中字幕点击后播放器 `iframe src` 不变，异步同步返回 202。
 - `npm run build`：通过。
 - `npm run test:rendered`：3/3 通过。
 - 本机 `yt-dlp 2026.7.4` 真实读取一个公开视频的人工英文字幕：61 个带时间轴片段；这次验证没有写入生产数据库。
 
-## 本轮真实生产只读回读
+## 生产迁移与部署回读
 
-2026-08-17 使用当前项目已有的 Supabase Service Role 做只读计数，未输出凭据：
+2026-08-18 已在 Supabase 生产项目执行：
 
-- `content_items`：146 条，其中 AIHot 2、YouTube 121、Get 笔记 23。
-- `jobs`：267 个，全部仍为 `queued`。
-- `transcripts`：0 条。
-- `content_profiles`：1 个旧版本。
-- `creator_content_analyses`、`event_analyses`：PostgREST 返回 `PGRST205`，说明生产尚未应用 V2 migration。
-- `worker_heartbeats`：PostgREST 返回 `PGRST205`，说明可靠性 migration 也尚未应用。
+- 迁移前在 `signal_desk_backup_20260818` schema 备份画像 1、内容 146、字幕 0、事件 2、趋势 2、Job 267。
+- `202608170002`、`202608170003` 和 `202608180001` 已应用；003 在 SQL Editor 中先单独提交 blocked enum，再执行事务部分。
+- `creator_content_analyses`、`event_analyses`、`content_versions`、`worker_heartbeats` 已可通过生产 PostgREST 读取。
+- blocked enum、5 个事务函数、6 个关键索引、4 个调度计划和唯一 active profile 均已 SQL 回读。
+- 使用两个临时生产 Auth 测试账号验证跨工作区读取为 0、跨工作区写入被 RLS 拒绝；两个测试账号已删除并回读无残留。
+- Sites 私密版本 9 已部署，提交 `76e714a31d13af58b881c2ddd37acc282f15d5f6`；`/api/health` 返回 HTTP 200 和 `mode=supabase`。
+- 生产数据仍为内容 146、Job 267、字幕 0；本轮尚未启动 Worker 消费。
 
-这些是只读现状，不代表本轮完成了新的真实同步或分析。
+首次直接在 SQL Editor 运行完整 003 返回 PostgreSQL `55P04` 并整次回滚，没有被当作成功；按 enum 独立提交后重新执行并回读通过。
 
 ## 仍然阻塞生产验收
 
-- 当前环境没有 `DATABASE_URL` 或可执行 SQL 的生产权限，因此没有应用 `202608170002_signal_desk_v2.sql` 和 `202608170003_signal_desk_reliable_daily.sql`。精确备份、执行和检查命令见 `docs/deployment.md`。
-- 当前环境未配置 AI Provider；267 个既有 Job 没有被消费，也没有真实 token、成本或结构化输出。
+- `202608180002_signal_desk_migration_audit.sql` 尚未在生产执行，等待浏览器控制恢复后写入迁移审计表。
+- OpenAI Platform 仍需用户完成登录；AI Provider 尚未创建或配置，267 个既有 Job 没有被消费，也没有真实 token、成本或结构化输出。
 - 生产环境仍未配置 Transcript Provider。虽然本机 `yt-dlp` Provider 已完成一次真实公开字幕读取，但生产 `transcripts` 仍为 0，尚未由常驻 Worker 写入。
-- 当前环境没有常驻 Worker 的 `DATABASE_URL` 和托管进程；06:15—06:30 调度没有上线，heartbeat 只完成代码和隔离数据库验证。
-- 没有第二个生产测试账号，因此双用户隔离只在隔离 PostgreSQL 环境验证，尚未做生产复验。
+- 常驻 Worker 需要重置 Supabase 数据库密码以生成新的 session-pooler `DATABASE_URL`；重置前等待用户明确确认，LaunchAgent 尚未安装。
 - 本轮没有重新执行 AIHot、YouTube 或 Get 笔记真实同步；生产数量保持上面的只读回读值。
 
-在 V2/可靠性迁移、常驻 Worker、AI Provider 和 Transcript Provider 真正配置并回读之前，PR 必须保持 Draft，产品不得标记为 production ready。
+在迁移审计、常驻 Worker、AI Provider、Transcript Provider 和既有 Job 消费结果全部回读之前，PR 必须保持 Draft，产品不得标记为 production ready。
