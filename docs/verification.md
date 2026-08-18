@@ -19,7 +19,7 @@
 - `npm install`：通过；完整依赖树报告 15 个漏洞（2 low、13 high），`npm audit --omit=dev` 的生产依赖为 0 个漏洞；本轮未运行破坏性 `audit fix --force`。
 - `npm run typecheck`：通过。
 - `npm run lint`：通过，保留 4 个真实外部缩略图的 `img` 性能提示，无 error。
-- `npm run test:unit`：42/42 通过。
+- `npm run test:unit`：45/45 通过。
 - `npm run test:db`：PostgreSQL 16 + pgvector 中七份迁移、锁内两步 current 切换、Transcript 输入幂等、Worker 锁所有权、画像版本、RLS 与迁移审计通过。
 - `npm run test:e2e`：4/4 通过；其中字幕点击后播放器 `iframe src` 不变，异步同步返回 202。
 - `npm run build`：通过。
@@ -37,18 +37,20 @@
 - 使用两个临时生产 Auth 测试账号验证跨工作区读取为 0、跨工作区写入被 RLS 拒绝；两个测试账号已删除并回读无残留。
 - Supabase 数据库密码已按用户明确授权轮换；新密码只保存在 macOS Keychain，Worker 配置文件不含明文密码。session pooler 直连已回读数据库、角色和 Job 数。
 - LaunchAgent `com.wangguoqing.signal-desk-worker` 已安装为常驻 Worker，生产 heartbeat 持续为 active；Worker bundle、环境文件和日志位于用户 Library，不依赖受 macOS TCC 限制的 Documents 路径。
-- AI Provider 使用本机已登录的 Codex CLI，不配置或创建大模型 API Key。结构化 smoke test、生产事件分析和竞品分析均有真实 token/latency 记录，`cost_usd=0`。
-- Transcript Provider 生产链为 `ingested_text,yt_dlp`。Get 笔记 36 条内容均有当前 `ready` Transcript，Provider 为 `get_notes_ingested_text`，真实正文按无时间轴边界保存；同一输入的重复 Transcript 已合并且唯一索引回读为 0 个重复组。
+- AI Provider 使用本机已登录的 Codex CLI，不配置或创建大模型 API Key。结构化 smoke test、生产事件分析、竞品分析和 YouTube 字幕分析均有真实 token/latency 记录，`cost_usd=0`。
+- Transcript Provider 生产链为 `ingested_text,yt_dlp`。Get 笔记 36 条内容均有当前 `ready` Transcript，真实正文按无时间轴边界保存；YouTube 已有 3 条当前 `ready` Transcript，分别保存 626、428、415 个时间轴片段。同一输入的重复 Transcript 已合并且唯一索引回读为 0 个重复组。
+- 3 条 YouTube Transcript 均完成版本化本地 Codex 分析，置信度为 0.91、0.91、0.94，返回 3～4 个推荐片段和完整 segment evidence refs；对应 AI runs 合计输入 181146 token、输出 8775 token、成本 0。
 - 一次生产同步已完成：AIHot 拉取并标准化 12 条、创建 9 个事件簇；YouTube 读取 33 个订阅并标准化 121 条视频；Get 笔记读取 379 条详情、标准化最近窗口 36 条，0 次限流、0 个博主失败。
 - YouTube 视频同步为 `partial_success`：32 个频道正常，`EliteTexts` 的 uploads playlist 返回官方 404 `playlistNotFound`；该单频道失败没有阻断其他频道。
 - 生产 Daily Brief 已生成 5 条证据条目；基于真实证据的选题候选、验证任务和来源回链已写入并回读。
+- Sites 最新分支头已私密部署；`/api/health` 返回 HTTP 200 和 `mode=supabase`。
 
 首次直接在 SQL Editor 运行完整 003 返回 PostgreSQL `55P04` 并整次回滚，没有被当作成功；按 enum 独立提交后重新执行并回读通过。
 
 ## 当前生产边界
 
-- `yt-dlp` 在生产公网出口读取 YouTube 字幕时持续收到 HTTP 429。失败会保留为 `failed` Transcript 记录，`fetch_transcript` 与 `analyze_creator_content` 整条流水线统一延后 15 分钟；不会标成 succeeded 或 manual_required，也不会在缺少字幕时提前做视频细节分析。
-- YouTube 同步新增与既有内容共有 242 组 Transcript / 创作者分析流水线等待上游限流恢复；常驻 Worker 会按退避时间继续消费。不得使用浏览器 Cookie、代理或挑战绕过来伪造生产成功。
+- `yt-dlp` 在生产公网出口读取 YouTube 字幕时会间歇收到 HTTP 429。失败会保留为 `failed` Transcript 记录并统一延后字幕抓取；只有缺少当前 ready Transcript 的创作者分析会同步延后，已成功写入字幕的分析会立即继续。不会把 429 标成 succeeded 或 manual_required。
+- 本轮同步后仍有 134 组去重后的 YouTube Transcript / 创作者分析流水线等待上游限流窗口，常驻 Worker 会按 15 分钟退避继续消费。不得使用浏览器 Cookie、代理或挑战绕过来伪造生产成功。
 - Worker 重启测试产生的孤立 `ai_runs` 会在 10 分钟阈值后标成 failed，已经完成的 Job 与 current 分析不受影响；这类运维中断与模型结构化输出失败分开统计。
 
-因此，数据库、常驻 Worker、本地 Codex AI、Get 笔记 Transcript 和三类真实同步已经通过；但完整 YouTube Transcript 生产链仍受外部 429 阻塞，PR 继续保持 Draft，暂不标记 production ready。
+数据库、常驻 Worker、本地 Codex AI、两类 Transcript Provider、三类真实同步和完整 YouTube Transcript→分析链均已通过。间歇 429 已作为受控外部退避状态处理，不再阻塞代码审查；PR 可以转为 Ready for Review。生产队列继续由常驻 Worker 消费，不能把等待退避的条目报告成已经完成。

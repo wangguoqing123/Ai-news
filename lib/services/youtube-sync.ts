@@ -6,8 +6,9 @@ import { decryptJson,encryptJson } from "../security/crypto";
 import { fetchYouTubePlaylistPage,fetchYouTubeVideoDetails,refreshYouTubeAccessToken,type YouTubeOAuthTokens,type YouTubePlaylistVideo } from "../youtube/api";
 import { fetchYouTubeSubscriptions } from "../youtube/api";
 import { persistYouTubeSubscriptions } from "../youtube/persistence";
-import { enqueueJob,ensureSource,finishSyncRun,persistNormalizedContent,startSyncRun } from "./ingest";
+import { ensureSource,finishSyncRun,persistNormalizedContent,startSyncRun } from "./ingest";
 import { enqueueContentAnalysis } from "./analysis-queue";
+import { enqueueTranscriptFetch } from "./transcript-queue";
 
 function todayInBeijing(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Shanghai"}).format(new Date());}
 function record(value:unknown):Record<string,unknown>{return value && typeof value === "object" ? value as Record<string,unknown> : {};}
@@ -67,7 +68,7 @@ export async function syncYouTubeChannelVideos(admin:SupabaseClient,workspaceId:
           const normalizedItem=normalizedContentSchema.parse({externalId:item.videoId,contentType:detail.contentKind,title,summary:description ? description.slice(0,800) : null,body:description || null,author:detail.channelTitle || subscription.name,canonicalUrl:`https://www.youtube.com/watch?v=${item.videoId}`,publishedAt,updatedAt:null,language:detail.defaultLanguage,durationSeconds:detail.durationSeconds,thumbnailUrl:detail.thumbnailUrl ?? item.thumbnailUrl,tags:[detail.contentKind],metrics:{views:detail.viewCount,likes:detail.likeCount,comments:detail.commentCount},sourceMetadata:{playlistItemId:item.playlistItemId,channelId:detail.channelId || subscription.external_id,creatorAvatarUrl:metadata.iconUrl ?? null,contentKind:detail.contentKind,liveStatus:detail.liveStatus,availability:detail.availability,chapters:detail.chapters,hasTranscript:false,transcriptStatus:"pending",interactionAvailable:detail.viewCount!==null,platform:"youtube",provenance:"verified_live"}});
           let persisted;try{persisted=await persistNormalizedContent(admin,{workspaceId,sourceId:source.id,sourceType:"youtube",syncRunId:runId,raw:{playlist:item,video:detail},normalized:normalizedItem})}catch(error){throw new Error(`视频 ${item.videoId} 写入失败：${error instanceof Error?error.message:String(error)}`)}normalized+=1;if(persisted.duplicateOfId)duplicates+=1;
           if(detail.availability === "public"&&persisted.shouldAnalyze){
-            await enqueueJob(admin,{workspaceId,type:"fetch_transcript",idempotencyKey:`fetch_transcript:${persisted.id}:${persisted.contentHash}`,payload:{contentId:persisted.id,videoId:item.videoId,contentHash:persisted.contentHash},priority:70});
+            await enqueueTranscriptFetch(admin,{workspaceId,contentId:persisted.id,contentHash:persisted.contentHash,sourceType:"youtube",videoId:item.videoId,priority:70});
             await enqueueContentAnalysis(admin,{workspaceId,contentId:persisted.id,contentHash:persisted.contentHash,priority:60});
           }
         }

@@ -26,3 +26,6 @@ test("every terminal job transition requires the current worker lock",()=>{
   }
 });
 
+test("transcript rate limits do not delay analysis when a ready transcript exists",()=>{const fail=functionSource("failJob","heartbeat");assert.match(fail,/j\.type='fetch_transcript'/);assert.match(fail,/j\.type='analyze_creator_content'/);assert.match(fail,/not exists\(/);assert.match(fail,/t\.is_current=true and t\.status='ready'/);});
+
+test("Worker shutdown grants the active local Codex job time to finish",()=>{const shutdown=source.slice(source.indexOf("const shutdown=async"),source.indexOf("process.on(\"SIGTERM\""));assert.match(shutdown,/WORKER_SHUTDOWN_GRACE_MS\?\?330_000/);assert.match(shutdown,/while\(activeJob&&Date\.now\(\)<deadline\)/);const installer=fs.readFileSync(new URL("../../scripts/install-worker-launchagent.sh",import.meta.url),"utf8");assert.match(installer,/<key>ExitTimeOut<\/key><integer>330<\/integer>/);assert.match(installer,/wait_for_bootout/);assert.match(installer,/launchctl kickstart "gui\/\$UID\/\$LABEL"/);assert.doesNotMatch(installer,/kickstart -k/);});

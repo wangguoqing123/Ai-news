@@ -50,6 +50,7 @@ type ClaimedJob={
 
 let activeJob:ClaimedJob|null=null;
 let stopping=false;
+let shuttingDown=false;
 
 async function claimJob():Promise<ClaimedJob|null>{
   const client=await pool.connect();
@@ -194,13 +195,30 @@ async function failJob(job:ClaimedJob,error:unknown){
     returning id
   `,[job.id,status,runAt,message,workerId]);
   if(transition.rowCount!==1)return false;
-  if(error instanceof RetryableJobError&&error.scope!=="job"){
-    const delayedTypes=error.scope==="transcript_pipeline"?["fetch_transcript","analyze_creator_content"]:[job.type];
+  if(error instanceof RetryableJobError&&error.scope==="transcript_pipeline"){
+    await pool.query(`
+      update public.jobs j
+      set run_at=greatest(j.run_at,$2),error=$3
+      where j.workspace_id=$1 and j.status='queued'
+        and(
+          j.type='fetch_transcript'
+          or(
+            j.type='analyze_creator_content'
+            and not exists(
+              select 1 from public.transcripts t
+              where t.workspace_id=j.workspace_id
+                and t.content_id::text=j.payload->>'contentId'
+                and t.is_current=true and t.status='ready'
+            )
+          )
+        )
+    `,[job.workspace_id,runAt,message]);
+  }else if(error instanceof RetryableJobError&&error.scope==="job_type"){
     await pool.query(`
       update public.jobs
       set run_at=greatest(run_at,$2),error=$3
-      where workspace_id=$1 and type=any($4::text[]) and status='queued'
-    `,[job.workspace_id,runAt,message,delayedTypes]);
+      where workspace_id=$1 and type=$4 and status='queued'
+    `,[job.workspace_id,runAt,message,job.type]);
   }
   await pool.query(`
     update public.job_attempts
@@ -345,8 +363,10 @@ async function loop(){
 }
 
 const shutdown=async()=>{
-  if(stopping)return;
-  stopping=true;
+  if(shuttingDown)return;
+  shuttingDown=true;stopping=true;
+  const deadline=Date.now()+Number(process.env.WORKER_SHUTDOWN_GRACE_MS??330_000);
+  while(activeJob&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,250));
   if(activeJob){
     await pool.query(`
       update public.jobs

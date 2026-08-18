@@ -23,7 +23,7 @@ Worker 使用 PostgreSQL 队列，不依赖 Redis。至少配置：
 - AI Provider 变量。默认 `AI_PROVIDER=codex_cli`，复用本机 Codex CLI 已有登录态，不复制凭据、不需要 API Key；需要设置 `CODEX_CLI_PATH`
 - Transcript Provider 变量。当前无 API Key 的生产配置是 `TRANSCRIPT_PROVIDER_CHAIN=ingested_text,yt_dlp`：Get 笔记口述正文明确保存为无时间轴 Transcript，YouTube 字幕由 Worker 中的 `yt-dlp` 获取
 
-进程通过 SIGTERM / SIGINT 优雅停止。Worker 每 30～60 秒续租当前 Job，并写入 `worker_heartbeats`；清理任务只有在 Lease、Job heartbeat 和 Worker heartbeat 都超时后才恢复任务。部署平台的健康检查应独立于 Web。
+进程通过 SIGTERM / SIGINT 优雅停止；默认给当前本地 Codex Job 330 秒完成窗口，超时后才安全重新排队。Worker 每 30～60 秒续租当前 Job，并写入 `worker_heartbeats`；清理任务只有在 Lease、Job heartbeat 和 Worker heartbeat 都超时后才恢复任务。部署平台的健康检查应独立于 Web。
 
 本机常驻 Worker 使用 LaunchAgent：先创建权限为 `0600` 的 `.env.worker.local`，再运行 `npm run worker:install`。`npm run worker:status` 会回读 heartbeat、Job、AI runs、字幕和费用，不输出任何密钥。
 
