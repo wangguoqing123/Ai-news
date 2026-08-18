@@ -19,7 +19,7 @@
 - `npm install`：通过；完整依赖树报告 15 个漏洞（2 low、13 high），`npm audit --omit=dev` 的生产依赖为 0 个漏洞；本轮未运行破坏性 `audit fix --force`。
 - `npm run typecheck`：通过。
 - `npm run lint`：通过，保留 4 个真实外部缩略图的 `img` 性能提示，无 error。
-- `npm run test:unit`：41/41 通过。
+- `npm run test:unit`：42/42 通过。
 - `npm run test:db`：PostgreSQL 16 + pgvector 中七份迁移、锁内两步 current 切换、Transcript 输入幂等、Worker 锁所有权、画像版本、RLS 与迁移审计通过。
 - `npm run test:e2e`：4/4 通过；其中字幕点击后播放器 `iframe src` 不变，异步同步返回 202。
 - `npm run build`：通过。
@@ -35,17 +35,20 @@
 - `creator_content_analyses`、`event_analyses`、`content_versions`、`worker_heartbeats` 已可通过生产 PostgREST 读取。
 - blocked enum、5 个事务函数、Transcript 输入唯一索引、4 个调度计划和唯一 active profile 均已 SQL 回读；三类 current 切换在 advisory lock 内先关闭旧行再打开目标行，迁移审计含 6 条生产记录。
 - 使用两个临时生产 Auth 测试账号验证跨工作区读取为 0、跨工作区写入被 RLS 拒绝；两个测试账号已删除并回读无残留。
-- Sites 私密版本 9 已部署，提交 `76e714a31d13af58b881c2ddd37acc282f15d5f6`；`/api/health` 返回 HTTP 200 和 `mode=supabase`。
-- 生产数据仍为内容 146、Job 267、字幕 0；本轮尚未启动 Worker 消费。
+- Supabase 数据库密码已按用户明确授权轮换；新密码只保存在 macOS Keychain，Worker 配置文件不含明文密码。session pooler 直连已回读数据库、角色和 Job 数。
+- LaunchAgent `com.wangguoqing.signal-desk-worker` 已安装为常驻 Worker，生产 heartbeat 持续为 active；Worker bundle、环境文件和日志位于用户 Library，不依赖受 macOS TCC 限制的 Documents 路径。
+- AI Provider 使用本机已登录的 Codex CLI，不配置或创建大模型 API Key。结构化 smoke test、生产事件分析和竞品分析均有真实 token/latency 记录，`cost_usd=0`。
+- Transcript Provider 生产链为 `ingested_text,yt_dlp`。Get 笔记 36 条内容均有当前 `ready` Transcript，Provider 为 `get_notes_ingested_text`，真实正文按无时间轴边界保存；同一输入的重复 Transcript 已合并且唯一索引回读为 0 个重复组。
+- 一次生产同步已完成：AIHot 拉取并标准化 12 条、创建 9 个事件簇；YouTube 读取 33 个订阅并标准化 121 条视频；Get 笔记读取 379 条详情、标准化最近窗口 36 条，0 次限流、0 个博主失败。
+- YouTube 视频同步为 `partial_success`：32 个频道正常，`EliteTexts` 的 uploads playlist 返回官方 404 `playlistNotFound`；该单频道失败没有阻断其他频道。
+- 生产 Daily Brief 已生成 5 条证据条目；基于真实证据的选题候选、验证任务和来源回链已写入并回读。
 
 首次直接在 SQL Editor 运行完整 003 返回 PostgreSQL `55P04` 并整次回滚，没有被当作成功；按 enum 独立提交后重新执行并回读通过。
 
-## 仍然阻塞生产验收
+## 当前生产边界
 
-- `202608180002_signal_desk_migration_audit.sql` 尚未在生产执行，等待浏览器控制恢复后写入迁移审计表。
-- OpenAI Platform 仍需用户完成登录；AI Provider 尚未创建或配置，267 个既有 Job 没有被消费，也没有真实 token、成本或结构化输出。
-- 生产环境仍未配置 Transcript Provider。虽然本机 `yt-dlp` Provider 已完成一次真实公开字幕读取，但生产 `transcripts` 仍为 0，尚未由常驻 Worker 写入。
-- 常驻 Worker 需要重置 Supabase 数据库密码以生成新的 session-pooler `DATABASE_URL`；重置前等待用户明确确认，LaunchAgent 尚未安装。
-- 本轮没有重新执行 AIHot、YouTube 或 Get 笔记真实同步；生产数量保持上面的只读回读值。
+- `yt-dlp` 在生产公网出口读取 YouTube 字幕时持续收到 HTTP 429。失败会保留为 `failed` Transcript 记录，`fetch_transcript` 与 `analyze_creator_content` 整条流水线统一延后 15 分钟；不会标成 succeeded 或 manual_required，也不会在缺少字幕时提前做视频细节分析。
+- YouTube 同步新增与既有内容共有 242 组 Transcript / 创作者分析流水线等待上游限流恢复；常驻 Worker 会按退避时间继续消费。不得使用浏览器 Cookie、代理或挑战绕过来伪造生产成功。
+- Worker 重启测试产生的孤立 `ai_runs` 会在 10 分钟阈值后标成 failed，已经完成的 Job 与 current 分析不受影响；这类运维中断与模型结构化输出失败分开统计。
 
-在迁移审计、常驻 Worker、AI Provider、Transcript Provider 和既有 Job 消费结果全部回读之前，PR 必须保持 Draft，产品不得标记为 production ready。
+因此，数据库、常驻 Worker、本地 Codex AI、Get 笔记 Transcript 和三类真实同步已经通过；但完整 YouTube Transcript 生产链仍受外部 429 阻塞，PR 继续保持 Draft，暂不标记 production ready。

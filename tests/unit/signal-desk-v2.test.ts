@@ -91,4 +91,6 @@ test("new analysis input supersedes queued work for the same content",()=>{
   assert.match(queue,/status:"cancelled"/);
   assert.match(queue,/superseded_by_new_analysis_input/);
   assert.match(queue,/contains\("payload",\{contentId:input\.contentId\}\)/);
+  assert.match(queue,/record\(item\.payload\)\.inputHash!==inputHash/);
+  assert.match(queue,/baseHash=content\.analysis_input_hash\?\?input\.contentHash/);
 });
