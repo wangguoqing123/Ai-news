@@ -68,6 +68,9 @@ PLIST
 plutil -lint "$TEMP_PLIST" >/dev/null
 install -m 600 "$TEMP_PLIST" "$PLIST"
 launchctl bootout "gui/$UID/$LABEL" >/dev/null 2>&1 || true
-launchctl bootstrap "gui/$UID" "$PLIST"
+if ! launchctl bootstrap "gui/$UID" "$PLIST"; then
+  sleep 2
+  launchctl bootstrap "gui/$UID" "$PLIST"
+fi
 launchctl kickstart -k "gui/$UID/$LABEL"
 echo "$LABEL installed"

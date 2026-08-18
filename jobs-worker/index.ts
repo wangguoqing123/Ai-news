@@ -236,6 +236,19 @@ async function withHeartbeat(job:ClaimedJob){
 
 let lastScheduleCheck=0;
 let lastBlockedCheck=0;
+let lastAIRunCleanup=0;
+
+async function cleanupStaleAIRuns(){
+  if(Date.now()-lastAIRunCleanup<60_000)return;
+  lastAIRunCleanup=Date.now();
+  const staleMs=Math.max(600_000,Number(process.env.AI_RUN_STALE_MS??600_000));
+  await pool.query(`
+    update public.ai_runs
+    set status='failed',error='Worker interrupted before AI run completion'
+    where status='running'
+      and created_at<now()-($1::text||' milliseconds')::interval
+  `,[staleMs]);
+}
 
 async function enqueueDueSchedules(){
   if(Date.now()-lastScheduleCheck<30_000)return;
@@ -308,6 +321,7 @@ async function loop(){
     set status='active',last_seen_at=now(),metadata=excluded.metadata
   `,[workerId,{pid:process.pid}]);
   while(!stopping){
+    await cleanupStaleAIRuns();
     await enqueueDueSchedules();
     await resumeConfiguredBlocked();
     const job=await claimJob();
