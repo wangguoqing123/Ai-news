@@ -3,6 +3,10 @@ export type TranscriptRequest = {
   sourceUrl: string;
   preferredLanguages?: string[];
   audioUrl?: string;
+  sourceType?: "aihot" | "youtube" | "get_notes";
+  inputText?: string | null;
+  language?: string | null;
+  metadata?: Record<string, unknown>;
 };
 
 export type TranscriptResult = {
@@ -11,10 +15,17 @@ export type TranscriptResult = {
   segments: Array<{ startMs: number; endMs: number; text: string }>;
   provider: string;
   confidence?: number;
+  hasTimestamps?:boolean;
+  sourceUrl?:string;
+  metadata?:Record<string,unknown>;
 };
 
 export interface TranscriptProvider {
   name: string;
   canHandle(input: TranscriptRequest): Promise<boolean>;
   fetch(input: TranscriptRequest): Promise<TranscriptResult>;
+}
+
+export class TranscriptUnavailableError extends Error {
+  constructor(message:string,readonly code="unavailable"){super(message);this.name="TranscriptUnavailableError";}
 }

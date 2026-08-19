@@ -1,9 +1,20 @@
-import { demoContent, demoTopics } from "../../../lib/demo-data";
+import { readToday } from "../../../lib/repositories/today";
+import { ensureDailyBrief } from "../../../lib/daily-brief/generate";
 import { requireRequestContext } from "../../../lib/server/auth";
+import { getSupabaseAdmin } from "../../../lib/server/supabase-admin";
 
-export async function GET(request: Request) {
+function todayInBeijing() { return new Intl.DateTimeFormat("en-CA",{ timeZone:"Asia/Shanghai" }).format(new Date()); }
+
+export async function GET(request:Request) {
   try {
     const context = await requireRequestContext(request);
-    return Response.json({ mode:context.mode,date:new Intl.DateTimeFormat("en-CA",{ timeZone:"Asia/Shanghai" }).format(new Date()),summary:{ added:47,deduplicated:21,learning:4,topics:3 },actions:[demoContent[1],demoContent[0],demoTopics[0]] });
-  } catch (error) { return error instanceof Response ? error : Response.json({ error:"无法生成今日简报" },{ status:500 }); }
+    const date = new URL(request.url).searchParams.get("date") ?? todayInBeijing();
+    if (context.mode === "demo") return Response.json({ mode:"demo",date,windowLabel:"过去 24 小时",stats:{ importantEvents:0,creatorUpdates:0,deepLearning:0,topicOpportunities:0 },lastSyncedAt:null,briefStatus:"missing",briefGeneratedAt:null,pendingTaskCount:0,brief:[],events:[],creators:[],crossSignals:[],worker:null });
+    const admin=getSupabaseAdmin();
+    await ensureDailyBrief(admin,context.workspaceId,date);
+    return Response.json(await readToday(admin,context.workspaceId,date));
+  } catch (error) {
+    if (error instanceof Response) return error;
+    return Response.json({ error:error instanceof Error ? error.message : "读取今日简报失败" },{ status:500 });
+  }
 }

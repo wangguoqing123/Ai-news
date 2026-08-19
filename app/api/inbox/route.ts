@@ -1,10 +1,2 @@
-import { demoContent } from "../../../lib/demo-data";
-import { requireRequestContext } from "../../../lib/server/auth";
-
-export async function GET(request: Request) {
-  try {
-    const context = await requireRequestContext(request); const url = new URL(request.url); const source = url.searchParams.get("source");
-    const items = source ? demoContent.filter((item) => item.sourceType === source) : demoContent;
-    return Response.json({ mode:context.mode,items,nextCursor:null });
-  } catch (error) { return error instanceof Response ? error : Response.json({ error:"无法读取收件箱" },{ status:500 }); }
-}
+import{requireRequestContext}from"../../../lib/server/auth";import{getSupabaseAdmin}from"../../../lib/server/supabase-admin";
+export async function GET(request:Request){try{const context=await requireRequestContext(request);if(context.mode==="demo")return Response.json({mode:"demo",items:[]});const source=new URL(request.url).searchParams.get("source");let query=getSupabaseAdmin().from("content_items").select("id,title,summary,author,canonical_url,published_at,status,metadata,source:sources!inner(type,name)").eq("workspace_id",context.workspaceId).is("duplicate_of_id",null).order("published_at",{ascending:false}).limit(100);if(source)query=query.eq("sources.type",source);const{data,error}=await query;if(error)throw new Error(error.message);return Response.json({mode:"live",items:data??[]});}catch(error){if(error instanceof Response)return error;return Response.json({error:error instanceof Error?error.message:"读取收件箱失败"},{status:500})}}
