@@ -25,6 +25,8 @@ async function contentForMetadata(admin:SupabaseClient,workspaceId:string,conten
   if(error||!data)throw new Error(error?.message??"内容不存在");return data;
 }
 
+async function promoteMetadataClassification(admin:SupabaseClient,workspaceId:string,contentId:string){const{error}=await admin.from("jobs").update({priority:96,run_at:new Date().toISOString()}).eq("workspace_id",workspaceId).eq("type","classify_content_metadata").in("status",["queued","blocked"]).contains("payload",{contentId});return!error;}
+
 async function saveTranslation(admin:SupabaseClient,input:{workspaceId:string;contentId:string;inputHash:string;title:string|null;summary:string|null;provider:string|null;status:"ready"|"skipped"|"failed";error?:string}){
   const{data,error}=await admin.from("content_translations").upsert({workspace_id:input.workspaceId,content_id:input.contentId,target_language:"zh-CN",translated_title:input.title,translated_summary:input.summary,input_hash:input.inputHash,provider:input.provider,status:input.status,is_current:false,error:input.error?.slice(0,1000)??null},{onConflict:"content_id,target_language,input_hash"}).select("id").single();
   if(error||!data)throw new Error(error?.message??"保存中文翻译失败");
@@ -39,12 +41,12 @@ export async function translateContentMetadata(admin:SupabaseClient,workspaceId:
   if(existing&&["ready","skipped"].includes(existing.status)){
     await admin.rpc("activate_content_translation",{target_workspace_id:workspaceId,target_content_id:contentId,target_translation_id:existing.id,target_language_code:"zh-CN"});
     await admin.from("content_items").update({metadata:{...metadata,translatedTitle:existing.translated_title,translatedSummary:existing.translated_summary,translationStatus:existing.status,translationProvider:existing.provider,translationInputHash:inputHash}}).eq("id",contentId);
-    return{status:existing.status,reused:true};
+    await promoteMetadataClassification(admin,workspaceId,contentId);return{status:existing.status,reused:true};
   }
   if(containsChinese(content.title)&&(!content.summary||containsChinese(content.summary))){
     const summary=content.summary?.trim()||MISSING_SUMMARY;await saveTranslation(admin,{workspaceId,contentId,inputHash,title:content.title,summary,provider:null,status:"skipped"});
     await admin.from("content_items").update({metadata:{...metadata,translatedTitle:content.title,translatedSummary:summary,translationStatus:"skipped",translationProvider:null,translationInputHash:inputHash}}).eq("id",contentId);
-    return{status:"skipped"as const,reused:false};
+    await promoteMetadataClassification(admin,workspaceId,contentId);return{status:"skipped"as const,reused:false};
   }
   const provider=getAIProvider();if(!provider){await admin.from("content_items").update({metadata:{...metadata,translationStatus:"translating",translationInputHash:inputHash}}).eq("id",contentId);return blockedJob("ai_provider","中文 Metadata 翻译等待 AI Provider");}
   try{
@@ -52,8 +54,8 @@ export async function translateContentMetadata(admin:SupabaseClient,workspaceId:
     const translatedSummary=content.summary?.trim()?result.data.translatedSummary:MISSING_SUMMARY;
     await saveTranslation(admin,{workspaceId,contentId,inputHash,title:result.data.translatedTitle,summary:translatedSummary,provider:result.provider,status:"ready"});
     const update=await admin.from("content_items").update({metadata:{...metadata,translatedTitle:result.data.translatedTitle,translatedSummary,translationStatus:"ready",translationProvider:result.provider,translationInputHash:inputHash}}).eq("id",contentId);if(update.error)throw new Error(update.error.message);
-    return{status:"ready"as const,provider:result.provider,inputTokens:result.inputTokens,outputTokens:result.outputTokens};
-  }catch(error){const message=error instanceof Error?error.message:String(error);await saveTranslation(admin,{workspaceId,contentId,inputHash,title:null,summary:null,provider:provider.name,status:"failed",error:message});await admin.from("content_items").update({metadata:{...metadata,translationStatus:"failed",translationError:message.slice(0,300),translationInputHash:inputHash}}).eq("id",contentId);return{status:"failed"as const,error:message};}
+    await promoteMetadataClassification(admin,workspaceId,contentId);return{status:"ready"as const,provider:result.provider,inputTokens:result.inputTokens,outputTokens:result.outputTokens};
+  }catch(error){const message=error instanceof Error?error.message:String(error);await saveTranslation(admin,{workspaceId,contentId,inputHash,title:null,summary:null,provider:provider.name,status:"failed",error:message});await admin.from("content_items").update({metadata:{...metadata,translationStatus:"failed",translationError:message.slice(0,300),translationInputHash:inputHash}}).eq("id",contentId);await promoteMetadataClassification(admin,workspaceId,contentId);return{status:"failed"as const,error:message};}
 }
 
 export async function classifyContentMetadata(admin:SupabaseClient,workspaceId:string,contentId:string){
