@@ -45,3 +45,23 @@ export const eventAnalysisSchema = z.object({
 export const crossSourceAnalysisSchema=z.object({sameTheme:z.boolean(),sameEvent:z.boolean(),expressionDifference:z.string(),differentiatedTopic:z.string(),validationTask:z.string(),confidence:z.number().min(0).max(1)});
 
 export const eventMergeJudgementSchema=z.object({sameEvent:z.boolean(),confidence:z.number().min(0).max(1),reason:z.string()});
+
+export const contentMetadataTranslationSchema=z.object({
+  translatedTitle:z.string(),
+  translatedSummary:z.string(),
+});
+
+export const contentMetadataClassificationSchema=z.object({
+  recommendation:z.enum(["process_first","quick_scan","topic_signal","low_priority","pending"]),
+  reason:z.string(),
+  matchedTopics:z.array(z.string()),
+  possibleValue:z.string(),
+  confidence:z.number().min(0).max(1),
+  boundary:z.literal("仅依据标题与简介的初步判断"),
+});
+
+export const transcriptTranslationChunkSchema=z.object({
+  segments:z.array(z.object({id:z.string(),translatedText:z.string()})),
+});
+
+export const providerHealthSchema=z.object({ok:z.literal(true)});

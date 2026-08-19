@@ -9,7 +9,7 @@ export async function GET(request:Request) {
   try {
     const context = await requireRequestContext(request);
     const date = new URL(request.url).searchParams.get("date") ?? todayInBeijing();
-    if (context.mode === "demo") return Response.json({ mode:"demo",date,windowLabel:"过去 24 小时",stats:{ importantEvents:0,creatorUpdates:0,deepLearning:0,topicOpportunities:0 },lastSyncedAt:null,briefStatus:"missing",brief:[],events:[],creators:[],crossSignals:[] });
+    if (context.mode === "demo") return Response.json({ mode:"demo",date,windowLabel:"过去 24 小时",stats:{ importantEvents:0,creatorUpdates:0,deepLearning:0,topicOpportunities:0 },lastSyncedAt:null,briefStatus:"missing",briefGeneratedAt:null,pendingTaskCount:0,brief:[],events:[],creators:[],crossSignals:[],worker:null });
     const admin=getSupabaseAdmin();
     await ensureDailyBrief(admin,context.workspaceId,date);
     return Response.json(await readToday(admin,context.workspaceId,date));

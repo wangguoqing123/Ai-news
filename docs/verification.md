@@ -2,6 +2,13 @@
 
 ## 本轮已实现并通过自动化测试
 
+- YouTube 已改为 Metadata First：自动同步只保存基础信息、中文翻译和初步判断，不创建字幕或深度分析任务；重点频道也不例外。
+- `POST /api/content/:id/process` 创建幂等深度处理请求，按 `fetch_transcript → translate_transcript → analyze_creator_content → finalize_processing_request` 流转；同一内容同一时间只有一个 active 请求。
+- 中文 Metadata 和 Transcript 翻译均按输入 Hash 复用；字幕保持 segment ID 与时间戳，一一回填 `translated_text`，部分完成可续跑。
+- Daily Brief 支持 `provisional / final / failed`，Final 不等待 YouTube 字幕或深度分析；首页展示生成时间、剩余任务和 Worker 心跳告警。
+- AIHot 多旧 Cluster 通过数据库 advisory lock 事务合并，成员只能归属一个 Cluster；语义合并会失效旧 current 分析并重排主 Cluster。
+- `material_content_hash` 与 `metrics_hash` 已拆分；指标变化只写快照。failed 原 Job 可归零重排，dead letter 保留原 Job 并创建带 `requeuedFromJobId` 的新 Job。
+
 - 内容画像可在 `/settings/profile` 编辑；保存会生成新版本、明确当前激活版本，并可选择只影响新内容、重排 pending 或重排最近 7 天。
 - 分析 Job 支持 `queued / running / blocked / succeeded / failed / dead_letter`；blocked 会记录原因、依赖、下次检查时间和最后检查时间。
 - 分析幂等键包含内容或事件 ID、输入 hash、Prompt version、Profile version 和 Analysis version；显式重新分析使用限时幂等 rerun hash。
@@ -19,14 +26,22 @@
 - `npm install`：通过；完整依赖树报告 15 个漏洞（2 low、13 high），`npm audit --omit=dev` 的生产依赖为 0 个漏洞；本轮未运行破坏性 `audit fix --force`。
 - `npm run typecheck`：通过。
 - `npm run lint`：通过，保留 4 个真实外部缩略图的 `img` 性能提示，无 error。
-- `npm run test:unit`：46/46 通过。
-- `npm run test:db`：PostgreSQL 16 + pgvector 中七份迁移、锁内两步 current 切换、Transcript 输入幂等、Worker 锁所有权、画像版本、RLS 与迁移审计通过。
+- `npm run test:unit`：54/54 通过。
+- `npm run test:db`：PostgreSQL 16 + pgvector 中九份迁移、Metadata/深度请求幂等、多旧 Cluster 合并、锁内两步 current 切换、Transcript 输入幂等、Worker 锁所有权、画像版本、RLS 与迁移审计通过。
 - `npm run test:e2e`：4/4 通过；其中字幕点击后播放器 `iframe src` 不变，异步同步返回 202。
 - `npm run build`：通过。
 - `npm run test:rendered`：3/3 通过。
 - 本机 `yt-dlp 2026.7.4` 真实读取一个公开视频的人工英文字幕：61 个带时间轴片段；这次验证没有写入生产数据库。
 
 ## 生产迁移与部署回读
+
+2026-08-19 Metadata First 增量：
+
+- 生产 PostgreSQL 17 完整备份完成后应用 `202608190001` 与 `202608190002`；后者修复 Supabase 将 pgcrypto 放在 `extensions` schema 时的函数搜索路径。
+- 253 个旧 YouTube 自动字幕/创作者分析待办已取消，替换为 Metadata 翻译与初步判断；真实增量同步新增 3 条、刷新 131 条，没有自动创建 Transcript Job。
+- 新增视频 `Even the Finance Guy Codes at Anthropic` 自动生成中文标题、中文摘要和 Metadata 初步判断；手动深度处理后取得 35 个时间轴字幕片段，35/35 有中文，中文深度分析与可回链选题证据完成。
+- Worker 启动自检回读为：数据库、Codex CLI 结构化请求、yt-dlp、Get 笔记 CLI 登录、Keychain 全部健康。
+- AIHot 真实 Worker 同步完成：10 条，8 个 active 分组，本轮 0 个需要合并；语义去重状态为 ready。精确的两个旧 Cluster 合并场景已在 PostgreSQL 集成测试中验证。
 
 2026-08-18 已在 Supabase 生产项目执行：
 

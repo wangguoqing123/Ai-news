@@ -3,7 +3,7 @@
 ## 1. Supabase
 
 1. 新建 Supabase 项目。
-2. 按顺序执行 `202608170001_signal_desk.sql`、`202608170002_signal_desk_v2.sql`、`202608170003_signal_desk_reliable_daily.sql`、`202608180001_signal_desk_concurrency.sql`、`202608180002_signal_desk_migration_audit.sql`、`202608180003_signal_desk_transcript_idempotency.sql` 和 `202608180004_signal_desk_activation_order.sql`。
+2. 按顺序执行 `202608170001_signal_desk.sql`、`202608170002_signal_desk_v2.sql`、`202608170003_signal_desk_reliable_daily.sql`、`202608180001_signal_desk_concurrency.sql`、`202608180002_signal_desk_migration_audit.sql`、`202608180003_signal_desk_transcript_idempotency.sql`、`202608180004_signal_desk_activation_order.sql`、`202608190001_signal_desk_metadata_first.sql` 和 `202608190002_signal_desk_cluster_digest_path.sql`。
 3. 在 Auth 中启用 Email OTP；Site URL 指向 Web 正式域名。
 4. 设置 `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`。
 5. 只在 Worker / Server 环境设置 `SUPABASE_SERVICE_ROLE_KEY` 与 `DATABASE_URL`。
@@ -15,7 +15,7 @@ Web 构建命令是 `npm run build`。生产环境必须使用 HTTPS。PWA manif
 
 ## 3. Worker
 
-Worker 使用 PostgreSQL 队列，不依赖 Redis。至少配置：
+Worker 使用 PostgreSQL 队列，不依赖 Redis。启动时会真实检查数据库、Codex 版本与登录、最小结构化请求、yt-dlp、Get 笔记登录和 Keychain，不只检查变量是否存在。至少配置：
 
 - `DATABASE_URL`
 - `DATABASE_SSL`
@@ -29,7 +29,7 @@ Worker 使用 PostgreSQL 队列，不依赖 Redis。至少配置：
 
 ## 4. 定时任务
 
-V2 迁移为每个现有工作区建立北京时间计划：06:15 AIHot、06:20 YouTube、06:25 Get 笔记、06:30 Daily Brief。常驻 Worker 每 30 秒读取 `job_schedules`，只创建幂等 Job；Web 进程不承担后台调度。
+V2 迁移为每个现有工作区建立北京时间计划：06:15 AIHot、06:20 YouTube Metadata、06:25 Get 笔记、06:40 Final Daily Brief。常驻 Worker 每 30 秒读取 `job_schedules`，启动后补排过去 24 小时漏跑项，并在 07:00 检查当天 Final Brief；Web 进程不承担后台调度。
 
 ## 5. 生产执行与检查清单
 
@@ -43,6 +43,8 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202608180001_sign
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202608180002_signal_desk_migration_audit.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202608180003_signal_desk_transcript_idempotency.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202608180004_signal_desk_activation_order.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202608190001_signal_desk_metadata_first.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202608190002_signal_desk_cluster_digest_path.sql
 ```
 
 Supabase SQL Editor 会把一次提交包装在事务中。执行 `003` 时必须先单独运行第一条 `alter type ... add value 'blocked'` 并确认成功，再运行该文件剩余部分；否则 PostgreSQL 会返回 `55P04 unsafe use of new value` 并回滚整次提交。
@@ -53,7 +55,9 @@ Supabase SQL Editor 会把一次提交包装在事务中。执行 `003` 时必�
 select to_regclass('public.creator_content_analyses'),
        to_regclass('public.event_analyses'),
        to_regclass('public.content_versions'),
-       to_regclass('public.worker_heartbeats');
+       to_regclass('public.worker_heartbeats'),
+       to_regclass('public.content_translations'),
+       to_regclass('public.content_processing_requests');
 select enumlabel from pg_enum join pg_type on pg_type.oid=enumtypid where typname='job_status' order by enumsortorder;
 select job_type,cron_expression,timezone,next_run_at from public.job_schedules order by job_type;
 select tablename,policyname from pg_policies where tablename in ('content_versions','worker_heartbeats','creator_content_analyses','event_analyses');

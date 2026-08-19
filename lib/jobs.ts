@@ -1,6 +1,6 @@
 export type JobStatus = "queued" | "running" | "blocked" | "succeeded" | "failed" | "dead_letter" | "cancelled";
 
-export type DependencyType = "ai_provider" | "ai_budget" | "transcript_provider" | "content_profile";
+export type DependencyType = "ai_provider" | "ai_budget" | "transcript_provider" | "content_profile" | "metadata_translation";
 
 export type BlockedJobResult = {
   status:"blocked";
@@ -78,7 +78,10 @@ export const JOB_TYPES = [
   "exact_dedupe",
   "semantic_dedupe",
   "deduplicate_content",
+  "translate_content_metadata",
+  "classify_content_metadata",
   "fetch_transcript",
+  "translate_transcript",
   "embed_content",
   "cluster_event",
   "analyze_event",
@@ -94,6 +97,7 @@ export const JOB_TYPES = [
   "grade_quiz",
   "generate_weekly_review",
   "reprocess_content",
+  "finalize_processing_request",
   "cleanup_expired_jobs",
 ] as const;
 

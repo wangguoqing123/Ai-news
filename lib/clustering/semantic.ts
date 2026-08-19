@@ -1,7 +1,8 @@
 import type{SupabaseClient}from"@supabase/supabase-js";
 import{getAIProvider}from"../ai/runtime";
 import{eventMergeJudgementSchema}from"../ai/schemas";
-import{eventSimilarity}from"./events";
+import{clusterInputHash,enqueueEventAnalysis}from"../services/analysis-queue";
+import{clusterBaseUpdate,eventSimilarity,type ClusterCandidate}from"./events";
 
 function cosine(a:number[],b:number[]){let dot=0,aa=0,bb=0;for(let index=0;index<Math.min(a.length,b.length);index++){dot+=a[index]*b[index];aa+=a[index]*a[index];bb+=b[index]*b[index];}return aa&&bb?dot/(Math.sqrt(aa)*Math.sqrt(bb)):0;}
 
@@ -30,14 +31,7 @@ export async function semanticEventDedupe(admin:SupabaseClient,workspaceId:strin
     const{data:relations}=await admin.from("event_cluster_items").select("cluster_id,content_id").in("content_id",[items[left].id,items[right].id]);
     const clusterIds=[...new Set((relations??[]).map(item=>item.cluster_id))];
     if(clusterIds.length!==2)continue;
-    const target=clusterIds[0],source=clusterIds[1];
-    const{data:sourceItems}=await admin.from("event_cluster_items").select("content_id").eq("cluster_id",source);
-    if(sourceItems?.length){
-      await admin.from("event_cluster_items").upsert(sourceItems.map(item=>({workspace_id:workspaceId,cluster_id:target,content_id:item.content_id,relation:"report"})),{onConflict:"cluster_id,content_id"});
-      await admin.from("event_cluster_items").delete().eq("cluster_id",source);
-      await admin.from("event_clusters").update({status:"merged"}).eq("id",source);
-      merged+=1;
-    }
+    const{data:memberRelations,error:memberError}=await admin.from("event_cluster_items").select("content_id").in("cluster_id",clusterIds);if(memberError)throw new Error(memberError.message);const memberIds=[...new Set((memberRelations??[]).map(item=>item.content_id))];const{data:memberRows,error:rowsError}=await admin.from("content_items").select("id,title,summary,published_at,signal_score,metadata").in("id",memberIds);if(rowsError)throw new Error(rowsError.message);const candidates:ClusterCandidate[]=(memberRows??[]).map(row=>({id:row.id,title:row.title,summary:row.summary,publishedAt:row.published_at,signalScore:row.signal_score,tags:Array.isArray((row.metadata as Record<string,unknown>|null)?.tags)?(row.metadata as Record<string,unknown>).tags as string[]:[]}));const lead=[...candidates].sort((a,b)=>(b.signalScore??0)-(a.signalScore??0))[0];if(!lead)continue;const published=candidates.map(item=>item.publishedAt).filter((value):value is string=>Boolean(value)).sort();const inputHash=clusterInputHash(memberIds);const payload=clusterBaseUpdate({workspaceId,lead,group:candidates,published,inputHash});const{data:primaryId,error:mergeError}=await admin.rpc("reconcile_event_cluster_group",{target_workspace_id:workspaceId,candidate_ids:memberIds,cluster_payload:payload});if(mergeError||!primaryId)throw new Error(mergeError?.message??"语义事件合并失败");const{data:primary,error:primaryError}=await admin.from("event_clusters").select("analysis_input_hash").eq("id",primaryId).single();if(primaryError||!primary)throw new Error(primaryError?.message??"读取主事件失败");await enqueueEventAnalysis(admin,{workspaceId,clusterId:primaryId,inputHash:primary.analysis_input_hash??inputHash,priority:90,requeueExisting:true});merged+=clusterIds.length-1;
   }
   return{status:"ready"as const,embedded:vectors?.length??0,judged,merged};
 }

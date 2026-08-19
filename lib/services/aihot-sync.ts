@@ -9,7 +9,7 @@ import { ensureSource,finishSyncRun,persistNormalizedContent,startSyncRun } from
 function todayInBeijing() { return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Shanghai"}).format(new Date()); }
 
 export async function syncAIHot(admin:SupabaseClient,workspaceId:string,options:{ window?:"24h"|"7d";mode?:"selected"|"all";limit?:number }={}) {
-  const source=await ensureSource(admin,{workspaceId,type:"aihot",externalId:"aihot",name:"AIHot",metadata:{provenance:"verified_live",endpoint:"v1"}});
+  const source=await ensureSource(admin,{workspaceId,type:"aihot",externalId:"aihot",name:"AIHot",processingMode:"automatic_deep",metadata:{provenance:"verified_live",endpoint:"v1"}});
   const runId=await startSyncRun(admin,{workspaceId,sourceId:source.id});
   const connector=new AIHotConnector();
   let cursor:string|null=null,fetched=0,normalized=0,duplicates=0,pages=0;
@@ -28,7 +28,7 @@ export async function syncAIHot(admin:SupabaseClient,workspaceId:string,options:
     const semanticDedupe=await semanticEventDedupe(admin,workspaceId,{since,until:now.toISOString()});
     const crossSource=await clusterCrossSourceTopics(admin,workspaceId);
     await finishSyncRun(admin,{runId,sourceId:source.id,fetched,normalized,errors:0,metrics:{pages,duplicates,clustering,semanticDedupe,crossSource}});
-    const brief=await ensureDailyBrief(admin,workspaceId,todayInBeijing(),{force:true});
+    const brief=await ensureDailyBrief(admin,workspaceId,todayInBeijing());
     return {source:"aihot" as const,status:"verified_live" as const,fetched,normalized,duplicates,pages,clustering,semanticDedupe,crossSource,brief};
   } catch (error) {
     await finishSyncRun(admin,{runId,sourceId:source.id,fetched,normalized,errors:1,error:error instanceof Error ? error.message : String(error)});

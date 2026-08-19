@@ -39,29 +39,14 @@ export async function clusterAIHotEvents(admin:SupabaseClient,workspaceId:string
   if (error) throw new Error(error.message);
   const candidates:ClusterCandidate[]=(data ?? []).map((row) => ({ id:row.id,title:row.title,summary:row.summary,publishedAt:row.published_at,signalScore:row.signal_score,tags:Array.isArray(asRecord(row.metadata).tags) ? asRecord(row.metadata).tags as string[] : [] }));
   const groups=groupEventCandidates(candidates);
-  let created=0;
+  let created=0,merged=0;
   for (const group of groups) {
     const ids=group.map((item) => item.id);
-    const { data:existingRelation } = await admin.from("event_cluster_items").select("cluster_id").eq("content_id",ids[0]).maybeSingle();
+    const { data:existingRelations,error:relationReadError } = await admin.from("event_cluster_items").select("cluster_id,cluster:event_clusters(status)").eq("workspace_id",workspaceId).in("content_id",ids);if(relationReadError)throw new Error(relationReadError.message);const existingClusterIds=[...new Set((existingRelations??[]).filter(item=>{const cluster=Array.isArray(item.cluster)?item.cluster[0]:item.cluster;return cluster?.status==="active";}).map(item=>item.cluster_id))];
     const lead=[...group].sort((a,b)=>(b.signalScore ?? 0)-(a.signalScore ?? 0))[0];
     const published=group.map((item) => item.publishedAt).filter((value):value is string => Boolean(value)).sort();
     const inputHash=clusterInputHash(ids);const clusterRow=clusterBaseUpdate({workspaceId,lead,group,published,inputHash});
-    let clusterId=existingRelation?.cluster_id as string|undefined;
-    let membershipChanged=true;
-    if (clusterId) {
-      const{data:oldRelations,error:oldError}=await admin.from("event_cluster_items").select("content_id").eq("cluster_id",clusterId);if(oldError)throw new Error(oldError.message);const oldIds=(oldRelations??[]).map(item=>item.content_id).sort();membershipChanged=oldIds.join(":")!==[...ids].sort().join(":");
-      const { error:updateError }=await admin.from("event_clusters").update(clusterRow).eq("id",clusterId);
-      if (updateError) throw new Error(updateError.message);
-      if(membershipChanged){const removed=oldIds.filter(id=>!ids.includes(id));if(removed.length){const deleted=await admin.from("event_cluster_items").delete().eq("cluster_id",clusterId).in("content_id",removed);if(deleted.error)throw new Error(deleted.error.message);}}
-    } else {
-      const { data:cluster,error:clusterError }=await admin.from("event_clusters").insert(clusterRow).select("id").single();
-      if (clusterError || !cluster) throw new Error(clusterError?.message ?? "创建事件失败");
-      clusterId=cluster.id;created+=1;
-    }
-    if(!clusterId)throw new Error("事件聚类 ID 缺失");
-    const { error:relationError }=await admin.from("event_cluster_items").upsert(ids.map((contentId) => ({ workspace_id:workspaceId,cluster_id:clusterId,content_id:contentId,relation:"report" })),{ onConflict:"cluster_id,content_id" });
-    if (relationError) throw new Error(relationError.message);
-    if(membershipChanged)await enqueueEventAnalysis(admin,{workspaceId,clusterId,inputHash,priority:80});
+    const{data:clusterId,error:reconcileError}=await admin.rpc("reconcile_event_cluster_group",{target_workspace_id:workspaceId,candidate_ids:ids,cluster_payload:clusterRow});if(reconcileError||!clusterId)throw new Error(reconcileError?.message??"事件聚类事务失败");if(!existingClusterIds.length)created+=1;if(existingClusterIds.length>1)merged+=existingClusterIds.length-1;const{data:reconciled,error:reconciledError}=await admin.from("event_clusters").select("analysis_input_hash").eq("id",clusterId).single();if(reconciledError||!reconciled)throw new Error(reconciledError?.message??"读取事件聚类失败");await enqueueEventAnalysis(admin,{workspaceId,clusterId,inputHash:reconciled.analysis_input_hash??inputHash,priority:80});
   }
-  return { candidates:candidates.length,clusters:groups.length,created };
+  return { candidates:candidates.length,clusters:groups.length,created,merged };
 }

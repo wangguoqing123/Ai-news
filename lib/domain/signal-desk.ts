@@ -2,6 +2,8 @@ export type SourceType = "aihot" | "youtube" | "get_notes";
 
 export type EventLevel = "重大" | "值得关注" | "了解即可";
 export type LearningRecommendation = "deep_learn" | "quick_scan" | "topic_signal" | "ignore" | "pending";
+export type MetadataRecommendation = "process_first" | "quick_scan" | "topic_signal" | "low_priority" | "pending";
+export type ProcessingMode = "metadata_only"|"deep_requested"|"fetching_transcript"|"translating_transcript"|"analyzing"|"ready"|"limited_ready"|"failed";
 
 export type EvidenceLink = {
   id: string;
@@ -43,6 +45,8 @@ export type CreatorItem = {
   durationSeconds: number | null;
   title: string;
   translatedTitle: string | null;
+  translatedSummary:string|null;
+  translationStatus:"translating"|"ready"|"skipped"|"failed";
   summary: string | null;
   thumbnailUrl: string | null;
   canonicalUrl: string | null;
@@ -50,6 +54,10 @@ export type CreatorItem = {
   hasTranscript: boolean;
   interactionAvailable: boolean;
   recommendation: LearningRecommendation;
+  metadataRecommendation:MetadataRecommendation;
+  metadataBoundary:string;
+  possibleValue:string|null;
+  processingMode:ProcessingMode;
   recommendationReason: string | null;
   learningTakeaways: string[];
   topicOpportunity: string | null;
@@ -94,11 +102,14 @@ export type TodayPayload = {
     topicOpportunities: number;
   };
   lastSyncedAt: string | null;
-  briefStatus: "ready" | "missing";
+  briefStatus: "preparing"|"provisional"|"final"|"failed"|"missing";
+  briefGeneratedAt:string|null;
+  pendingTaskCount:number;
   brief: DailyBriefEntry[];
   events: TodayEvent[];
   creators: CreatorItem[];
   crossSignals: CrossSignal[];
+  worker:{online:boolean;lastHeartbeat:string|null;lastScheduleAt:string|null;lastFinalBrief:string|null;queued:number;running:number;blocked:number;failed:number;deadLetter:number}|null;
 };
 
 export type ContentAction = "read" | "saved" | "watch_later" | "ignored" | "not_interested" | "queued_learning";
