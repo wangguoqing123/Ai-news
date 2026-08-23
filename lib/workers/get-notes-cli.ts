@@ -18,10 +18,15 @@ function dateTime(value:string|undefined){if(!value)return null;const parsed=new
 function todayInBeijing(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Shanghai"}).format(new Date());}
 async function mapLimit<T,R>(items:T[],limit:number,handler:(item:T)=>Promise<R>){const output:R[]=[];let cursor=0;async function worker(){while(cursor<items.length){const index=cursor++;output[index]=await handler(items[index]);}}await Promise.all(Array.from({length:Math.min(limit,items.length)},worker));return output;}
 
-type Runner=(args:string[],timeoutMs?:number)=>Promise<unknown>;
-async function listBloggers(knowledgeBaseId:string,run:Runner){
-  const bloggers:Blogger[]=[];let page=1,hasMore=true;
-  while(hasMore && page<=20){const payload=await run(["kb","bloggers",knowledgeBaseId,"--page",String(page)]) as {data?:{bloggers?:Blogger[];has_more?:boolean}};bloggers.push(...(payload.data?.bloggers ?? []));hasMore=Boolean(payload.data?.has_more);page+=1;}
+export type Runner=(args:string[],timeoutMs?:number)=>Promise<unknown>;
+export function shouldContinueBloggerPagination(input:{hasMore:boolean;total:number|null;accumulated:number;newItems:number}){return input.newItems>0&&(input.hasMore||(input.total!==null&&input.total>input.accumulated));}
+export async function listBloggers(knowledgeBaseId:string,run:Runner){
+  const bloggers:Blogger[]=[];const seen=new Set<string>();let page=1,continuePaging=true;
+  while(continuePaging&&page<=20){
+    const payload=await run(["kb","bloggers",knowledgeBaseId,"--page",String(page)]) as {data?:{bloggers?:Blogger[];has_more?:boolean;total?:number}};const items=payload.data?.bloggers??[];let newItems=0;
+    for(const blogger of items){const id=String(blogger.follow_id);if(seen.has(id))continue;seen.add(id);bloggers.push(blogger);newItems+=1;}
+    const total=Number.isFinite(payload.data?.total)?Number(payload.data?.total):null;continuePaging=shouldContinueBloggerPagination({hasMore:Boolean(payload.data?.has_more),total,accumulated:bloggers.length,newItems});page+=1;
+  }
   return bloggers;
 }
 

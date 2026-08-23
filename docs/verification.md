@@ -42,6 +42,7 @@
 - 新增视频 `Even the Finance Guy Codes at Anthropic` 自动生成中文标题、中文摘要和 Metadata 初步判断；手动深度处理后取得 35 个时间轴字幕片段，35/35 有中文，中文深度分析与可回链选题证据完成。
 - Worker 启动自检回读为：数据库、Codex CLI 结构化请求、yt-dlp、Get 笔记 CLI 登录、Keychain 全部健康。
 - AIHot 真实 Worker 同步完成：10 条，8 个 active 分组，本轮 0 个需要合并；语义去重状态为 ready。精确的两个旧 Cluster 合并场景已在 PostgreSQL 集成测试中验证。
+- Get 笔记博主分页同时依据 `has_more` 与 `total > accumulated` 判断是否继续；已覆盖上游第一页错误返回 `has_more=false,total=28`、第二页仍有 8 个博主的回归场景，并对空页与重复页安全停止。
 
 2026-08-18 已在 Supabase 生产项目执行：
 
