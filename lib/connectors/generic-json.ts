@@ -15,6 +15,13 @@ export const fieldMappingSchema = z.object({
     updatedAt: z.string().optional(),
     thumbnailUrl: z.string().optional(),
     tags: z.string().optional(),
+    creatorId: z.string().optional(),
+    platform: z.string().optional(),
+    likes: z.string().optional(),
+    comments: z.string().optional(),
+    saves: z.string().optional(),
+    shares: z.string().optional(),
+    commentsContent: z.string().optional(),
   }),
 });
 
@@ -101,8 +108,19 @@ export class GenericJsonConnector implements SourceConnector<GenericConnectorCon
       updatedAt: text(readPath(raw, f.updatedAt)),
       thumbnailUrl: text(readPath(raw, f.thumbnailUrl)),
       tags: Array.isArray(tagsRaw) ? tagsRaw.map(String) : typeof tagsRaw === "string" ? tagsRaw.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) : [],
-      metrics: {},
-      sourceMetadata: {},
+      metrics: {
+        likes: number(readPath(raw,f.likes)),comments: number(readPath(raw,f.comments)),saves: number(readPath(raw,f.saves)),shares: number(readPath(raw,f.shares)),
+      },
+      sourceMetadata: {
+        creatorId:text(readPath(raw,f.creatorId)),platform:text(readPath(raw,f.platform)),commentsContent:readPath(raw,f.commentsContent),
+        interactionAvailable:[f.likes,f.comments,f.saves,f.shares].some((path)=>number(readPath(raw,path))!==null),
+      },
     });
   }
+}
+
+function number(value:unknown):number|null {
+  if(typeof value === "number" && Number.isFinite(value))return value;
+  if(typeof value === "string" && value.trim() && Number.isFinite(Number(value)))return Number(value);
+  return null;
 }

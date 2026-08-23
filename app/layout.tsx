@@ -19,8 +19,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
   const title = "Signal Desk｜信号台";
-  const description = "把分散信号，变成理解、知识与选题";
-  const socialImage = `${origin}/og.png`;
+  const description = "每天看清 AI 世界与关注博主的真实更新，从证据进入学习与选题。";
+  const socialImage = `${origin}/og-v2.png`;
   return {
     metadataBase: new URL(origin),
     title,

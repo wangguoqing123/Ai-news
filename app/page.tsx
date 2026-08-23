@@ -1,5 +1,3 @@
-import { SignalDeskApp } from "./signal-desk-app";
+import { redirect } from "next/navigation";
 
-export default function Home() {
-  return <SignalDeskApp />;
-}
+export default function Home() { redirect("/today"); }

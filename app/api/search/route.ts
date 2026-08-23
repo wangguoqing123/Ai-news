@@ -1,15 +1,2 @@
-import { demoContent, demoTopics, knowledgeCards } from "../../../lib/demo-data";
-import { requireRequestContext } from "../../../lib/server/auth";
-
-export async function GET(request: Request) {
-  try {
-    await requireRequestContext(request); const q = new URL(request.url).searchParams.get("q")?.trim().toLowerCase() ?? "";
-    if (!q) return Response.json({ items:[] });
-    const items = [
-      ...demoContent.filter((item) => `${item.title}${item.summary}`.toLowerCase().includes(q)).map((item) => ({ type:"content",id:item.id,title:item.title,excerpt:item.summary })),
-      ...demoTopics.filter((item) => `${item.topic}${item.angle}`.toLowerCase().includes(q)).map((item) => ({ type:"topic",id:item.id,title:item.topic,excerpt:item.angle })),
-      ...knowledgeCards.filter((item) => `${item.title}${item.body}`.toLowerCase().includes(q)).map((item) => ({ type:"knowledge",id:item.id,title:item.title,excerpt:item.body })),
-    ];
-    return Response.json({ items,ranking:"demo_keyword; production uses PostgreSQL FTS + pgvector" });
-  } catch (error) { return error instanceof Response ? error : Response.json({ error:"搜索失败" },{ status:500 }); }
-}
+import{requireRequestContext}from"../../../lib/server/auth";import{getSupabaseAdmin}from"../../../lib/server/supabase-admin";
+export async function GET(request:Request){try{const context=await requireRequestContext(request);const q=new URL(request.url).searchParams.get("q")?.trim()??"";if(context.mode==="demo"||!q)return Response.json({mode:context.mode,items:[]});const admin=getSupabaseAdmin();const pattern=`%${q.replace(/[%_]/g,"\\$&")}%`;const[content,topics,cards,notes]=await Promise.all([admin.from("content_items").select("id,title,summary,source:sources(type)").eq("workspace_id",context.workspaceId).or(`title.ilike.${pattern},summary.ilike.${pattern},body.ilike.${pattern}`).limit(20),admin.from("topic_candidates").select("id,topic,differentiated_angle").eq("workspace_id",context.workspaceId).or(`topic.ilike.${pattern},differentiated_angle.ilike.${pattern}`).limit(10),admin.from("knowledge_cards").select("id,title,content").eq("workspace_id",context.workspaceId).or(`title.ilike.${pattern},content.ilike.${pattern}`).limit(10),admin.from("user_notes").select("id,markdown,content_id").eq("workspace_id",context.workspaceId).ilike("markdown",pattern).limit(10)]);for(const result of[content,topics,cards,notes])if(result.error)throw new Error(result.error.message);const items=[...(content.data??[]).map((item)=>({type:"content",id:item.id,title:item.title,excerpt:item.summary,href:(item.source as unknown as{type:string})?.type==="aihot"?`/ai-news?content=${item.id}`:`/learning/${item.id}`})),...(topics.data??[]).map((item)=>({type:"topic",id:item.id,title:item.topic,excerpt:item.differentiated_angle,href:`/learning?topic=${item.id}`})),...(cards.data??[]).map((item)=>({type:"knowledge",id:item.id,title:item.title,excerpt:item.content,href:`/learning?card=${item.id}`})),...(notes.data??[]).map((item)=>({type:"note",id:item.id,title:item.markdown.slice(0,60),excerpt:item.markdown,href:item.content_id?`/learning/${item.content_id}`:"/learning"}))];return Response.json({mode:"live",items});}catch(error){if(error instanceof Response)return error;return Response.json({error:error instanceof Error?error.message:"搜索失败"},{status:500})}}

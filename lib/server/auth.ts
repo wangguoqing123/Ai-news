@@ -4,7 +4,8 @@ export type RequestContext = { mode:"demo";workspaceId:"demo";userId:"demo" } | 
 
 export async function requireRequestContext(request: Request): Promise<RequestContext> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !anon || !service) return { mode:"demo",workspaceId:"demo",userId:"demo" };
+  if (process.env.SIGNAL_DESK_DEMO_MODE === "true" || process.env.NEXT_PUBLIC_SIGNAL_DESK_DEMO_MODE === "true") return { mode:"demo",workspaceId:"demo",userId:"demo" };
+  if (!url || !anon || !service) throw new Response(JSON.stringify({ error:"工作区尚未完成数据库配置",code:"workspace_unconfigured" }),{ status:503,headers:{ "Content-Type":"application/json" } });
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i,"");
   if (!token) throw new Response(JSON.stringify({ error:"未登录" }),{ status:401,headers:{ "Content-Type":"application/json" } });
   const auth = createClient(url,anon); const { data,error } = await auth.auth.getUser(token);

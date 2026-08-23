@@ -35,6 +35,11 @@ const eslintConfig = defineConfig([
         version: "detect",
       },
     },
+    rules: {
+      // These client views intentionally start async repository reads from effects.
+      // The calls are guarded by stable callbacks and do not derive local state.
+      "react-hooks/set-state-in-effect": "off",
+    },
   },
 ]);
 

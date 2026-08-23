@@ -1,0 +1,1 @@
+import{LearningDetailPage}from"../../../../components/learning/learning-detail";export default async function Page({params}:{params:Promise<{contentId:string}>}){const{contentId}=await params;return<LearningDetailPage contentId={contentId}/>}

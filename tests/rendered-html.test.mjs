@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 async function loadWorker() {
@@ -12,13 +14,13 @@ const ctx = { waitUntil() {}, passThroughOnException() {} };
 
 test("server renders Signal Desk without starter markers", async () => {
   const worker = await loadWorker();
-  const response = await worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }),env,ctx);
+  const response = await worker.fetch(new Request("http://localhost/today", { headers: { accept: "text/html" } }),env,ctx);
   assert.equal(response.status,200);
   assert.match(response.headers.get("content-type") ?? "",/^text\/html\b/i);
   const html = await response.text();
   assert.match(html,/<title>Signal Desk｜信号台<\/title>/i);
   assert.match(html,/Signal Desk/);
-  assert.match(html,/正在打开你的工作区|今日三项/);
+  assert.match(html,/正在打开真实工作区|今天，先看真正重要的变化/);
   assert.doesNotMatch(html,/codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -28,5 +30,10 @@ test("health endpoint reports the running mode", async () => {
   assert.equal(response.status,200);
   const data = await response.json();
   assert.equal(data.service,"signal-desk-web");
-  assert.ok(["demo","supabase"].includes(data.mode));
+  assert.ok(["demo","supabase","unconfigured"].includes(data.mode));
+});
+
+test("production client bundle omits the broken vinext Link runtime", () => {
+  const chunks = fs.readdirSync(path.join(process.cwd(),"dist/client/_next/static/chunks"));
+  assert.deepEqual(chunks.filter((name) => /^link-.*\.js$/.test(name)),[]);
 });

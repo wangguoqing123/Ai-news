@@ -1,0 +1,21 @@
+import type{SupabaseClient}from"@supabase/supabase-js";
+import{transcriptTranslationChunkSchema}from"../ai/schemas";
+import{getAIProvider}from"../ai/runtime";
+import{sha256}from"../dedupe";
+import{blockedJob}from"../jobs";
+import{containsChinese}from"./metadata-processing";
+
+export function validateTranscriptTranslationChunk(inputIds:string[],output:Array<{id:string;translatedText:string}>){if(output.length!==inputIds.length||output.some((item,index)=>item.id!==inputIds[index]))throw new Error("字幕翻译未保持片段一一对应");return output;}
+
+export async function translateTranscript(admin:SupabaseClient,input:{workspaceId:string;contentId:string;transcriptId:string;targetLanguage?:string}){
+  const targetLanguage=input.targetLanguage??"zh-CN";const{data:transcript,error}=await admin.from("transcripts").select("id,input_hash,language,status,translation_status,translation_input_hash,segments:transcript_segments(id,segment_index,start_ms,end_ms,text,translated_text)").eq("workspace_id",input.workspaceId).eq("content_id",input.contentId).eq("id",input.transcriptId).single();if(error||!transcript)throw new Error(error?.message??"字幕不存在");
+  const segments=(transcript.segments??[]).sort((a,b)=>a.segment_index-b.segment_index);if(!segments.length)throw new Error("字幕没有可翻译片段");const inputHash=sha256(JSON.stringify({transcriptInputHash:transcript.input_hash,targetLanguage}));
+  if(transcript.translation_status==="ready"&&transcript.translation_input_hash===inputHash&&segments.every(item=>item.translated_text))return{status:"ready"as const,segments:segments.length,reused:true};
+  const chinese=String(transcript.language??"").toLowerCase().startsWith("zh")||containsChinese(segments.slice(0,30).map(item=>item.text).join(" "));
+  if(chinese){const update=await admin.from("transcript_segments").upsert(segments.map(item=>({id:item.id,workspace_id:input.workspaceId,transcript_id:transcript.id,segment_index:item.segment_index,start_ms:item.start_ms,end_ms:item.end_ms,text:item.text,translated_text:item.text})),{onConflict:"id"});if(update.error)throw new Error(update.error.message);const done=await admin.from("transcripts").update({translation_status:"ready",translation_input_hash:inputHash,translation_target_language:targetLanguage,translated_at:new Date().toISOString()}).eq("id",transcript.id);if(done.error)throw new Error(done.error.message);return{status:"ready"as const,segments:segments.length,reused:false,skipped:true};}
+  const provider=getAIProvider();if(!provider)return blockedJob("ai_provider","字幕翻译等待 AI Provider");const pending=segments.filter(item=>!item.translated_text);let translated=segments.length-pending.length;
+  try{
+    for(let offset=0;offset<pending.length;offset+=60){const chunk=pending.slice(offset,offset+60);const result=await provider.generateStructuredDetailed({schema:transcriptTranslationChunkSchema,schemaName:"transcript_translation_chunk",system:"你是逐段字幕翻译器。只把每个 text 翻译成简体中文，不总结、不扩写、不合并、不拆分、不遗漏。必须保留并原样返回每个 segment id；产品名、模型名和工具名保持原名。返回的 segments 数量、顺序和 id 必须与输入完全一致。",prompt:JSON.stringify({targetLanguage:"简体中文",segments:chunk.map(item=>({id:item.id,text:item.text}))}),temperature:0});const output=validateTranscriptTranslationChunk(chunk.map(item=>item.id),result.data.segments);for(const item of output){const saved=await admin.from("transcript_segments").update({translated_text:item.translatedText}).eq("workspace_id",input.workspaceId).eq("transcript_id",transcript.id).eq("id",item.id);if(saved.error)throw new Error(saved.error.message);translated+=1;}await admin.from("transcripts").update({translation_status:"partial",translation_input_hash:inputHash,translation_target_language:targetLanguage}).eq("id",transcript.id);}
+    const done=await admin.from("transcripts").update({translation_status:"ready",translation_input_hash:inputHash,translation_target_language:targetLanguage,translated_at:new Date().toISOString()}).eq("id",transcript.id);if(done.error)throw new Error(done.error.message);return{status:"ready"as const,segments:segments.length,translated,reused:false};
+  }catch(error){await admin.from("transcripts").update({translation_status:"partial",translation_input_hash:inputHash,translation_target_language:targetLanguage}).eq("id",transcript.id);throw error;}
+}
